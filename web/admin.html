@@ -12,7 +12,7 @@ main{display:grid;grid-template-columns:1fr 320px;gap:20px;padding:20px;max-widt
 /* 8 cases identiques : 4 x 2, hauteur fixe */
 .grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
 @media(max-width:700px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
-.w{background:var(--panel);border:2px solid var(--line);border-radius:14px;padding:12px;cursor:pointer;user-select:none;height:190px;display:flex;flex-direction:column;gap:8px;position:relative;transition:border-color .15s}
+.w{background:var(--panel);border:2px solid var(--line);border-radius:14px;padding:12px;cursor:pointer;user-select:none;height:auto;display:flex;flex-direction:column;gap:8px;position:relative;transition:border-color .15s}
 .w:hover{border-color:#47505d}
 .w.sel{border-color:var(--acc);box-shadow:0 0 0 1px var(--acc);background:#1f1d12}
 .w.off .ph,.w.off .name{opacity:.45}
@@ -24,8 +24,10 @@ main{display:grid;grid-template-columns:1fr 320px;gap:20px;padding:20px;max-widt
 .w .meta{font-size:12px;display:flex;gap:8px;color:var(--mut)}
 .w .edit{position:absolute;top:8px;right:8px;background:none;border:none;color:var(--mut);padding:4px;font-size:15px;opacity:0}
 .w:hover .edit{opacity:1}.w .edit:hover{color:var(--fg)}
-.w .last{flex:1;min-height:0;background:#0b0d10;border-radius:8px;padding:8px 10px;font-size:15px;font-weight:600;overflow:hidden;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;word-break:break-word}
-.w .last.empty{color:#444;font-weight:400}
+.w .last{aspect-ratio:1;width:100%;background:#000;border:3px solid #2b2b2e;border-radius:12px;display:flex;align-items:center;justify-content:center;color:#fff;overflow:hidden;container-type:size}
+/* mini écran : même grille 12 x 8 que la montre, mise à l'échelle de la case */
+.w .last .tgrid{--cw:min(7.4cqw,11cqh);--ch:min(10.5cqw,11.5cqh);--fs:min(9cqw,10cqh)}
+.w .last.empty{color:#333;font:bold 3em Arial,sans-serif}
 .w .lt{font-size:11px;color:var(--mut);display:flex;justify-content:space-between}
 .st.ok{color:var(--ok)}.st.wait{color:var(--warn)}.st.no{color:var(--bad)}
 .bat.low{color:var(--bad);font-weight:700}
@@ -37,9 +39,6 @@ button.primary:disabled{opacity:.4;cursor:default}button.danger{color:var(--bad)
 textarea{width:100%;background:#0b0d10;color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:12px;font:22px/1.3 system-ui,sans-serif;resize:none;height:90px}
 textarea:focus,input:focus{outline:2px solid var(--acc)}
 .row{display:flex;align-items:center;gap:12px;margin-top:10px}.row .sp{flex:1}.cnt{color:var(--mut);font-size:13px}.cnt.over{color:var(--bad)}
-.prevrow{display:flex;align-items:center;gap:14px;margin-top:10px}
-.prev{background:#000;border:6px solid #2b2b2e;border-radius:18px;width:252px;height:252px;padding:22px 6px 0;color:#fff;--cw:19px;--ch:27px;--fs:29px;flex:none}
-.prev.bad{border-color:var(--bad)}
 .to{color:var(--mut);font-size:14px;margin-bottom:8px}.to b{color:var(--fg)}
 aside{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px;max-height:calc(100vh - 100px);overflow:auto;position:sticky;top:20px}
 aside h2{font-size:13px;margin:0 0 10px;color:var(--mut);text-transform:uppercase;letter-spacing:.05em}
@@ -59,13 +58,12 @@ dialog .end{display:flex;justify-content:flex-end;gap:8px;margin-top:16px}
 <section>
   <div class="grid" id="grid"></div>
   <div class="bar">
-    <button id="all">Tout sélectionner</button><button id="none">Aucun</button>
+    <button id="all">Tout sélectionner</button><button id="none">Tout désélectionner</button>
     <button id="clr" title="Efface l'écran des montres sélectionnées (et la case public)">Effacer l'écran</button>
   </div>
   <div class="compose">
     <div class="to" id="to"></div>
     <textarea id="txt" placeholder="Message… (Entrée pour envoyer, Maj+Entrée = retour ligne)"></textarea>
-    <div class="prevrow"><div class="prev"><div class="tgrid" id="prev"></div></div><div class="hint" id="prevHint">Aperçu exact de la montre (12 × 8 caractères)</div></div>
     <div class="row"><span class="cnt" id="cnt">0 / 96</span><span class="sp"></span>
       <button class="primary" id="send" disabled>Envoyer</button></div>
     <div class="hint">Clic = sélectionner · ✎ = nom et photo · Touches 1–8 (hors saisie) = sélection rapide · Échap = tout désélectionner</div>
@@ -110,9 +108,10 @@ function render() {
         <div class="who"><div class="name">${esc(w.name)}</div>
           <div class="meta">${status(w)}<span class="bat ${w.battery >= 0 && w.battery < 20 ? 'low' : ''}">${w.battery >= 0 ? '🔋' + w.battery + '%' : ''}</span>${w.sim ? '<span>sim</span>' : ''}</div></div>
       </div>
-      <div class="last ${w.last ? '' : 'empty'}">${w.last ? esc(w.last.text) : 'Aucun message'}</div>
+      <div class="last ${w.last ? '' : 'empty'}">${w.last ? `<div class="tgrid" data-txt="${esc(w.last.text)}"></div>` : w.id}</div>
       <div class="lt">${w.last ? `<span>${hhmm(w.last.time)}</span><span>${w.last.acked ? '<span class="st ok">✓ reçu</span>' : '<span class="st wait">… envoi</span>'}</span>` : '&nbsp;'}</div>
     </div>`).join('');
+  $('grid').querySelectorAll('.tgrid[data-txt]').forEach(g => renderGrid(g, g.dataset.txt));
   const byId = Object.fromEntries(state.watches.map(w => [w.id, w]));
   $('hist').innerHTML = state.history.slice().reverse().map(h => `
     <div class="h"><div class="t">${hhmm(h.time)} → ${esc(byId[h.to]?.name || h.to)} ${h.acked ? '✓' : '<span style="color:var(--warn)">…</span>'}</div>${esc(h.text)}</div>`).join('') || '<div class="hint">Rien encore.</div>';
@@ -123,10 +122,8 @@ function updateCompose() {
   $('to').innerHTML = names.length === 0 ? 'Choisis un ou plusieurs destinataires ci-dessus'
     : names.length === state.watches.length ? 'À : <b>Tout le monde</b>' : 'À : <b>' + names.map(esc).join(', ') + '</b>';
   const v = $('txt').value, n = [...v.trim()].length, fits = wrapGrid(v).ok && n <= GRID.max;
-  renderGrid($('prev'), v);
-  $('cnt').textContent = n + ' / ' + GRID.max; $('cnt').classList.toggle('over', !fits);
-  $('prev').parentElement.classList.toggle('bad', !fits);
-  $('prevHint').textContent = fits ? 'Aperçu exact de la montre (12 × 8 caractères)' : 'Trop long pour l\'écran : raccourcis le message';
+  $('cnt').classList.toggle('over', !fits);
+  $('cnt').textContent = fits ? n + ' / ' + GRID.max : 'Trop long pour l\'écran (' + n + ' / ' + GRID.max + ')';
   $('send').disabled = !names.length || !v.trim() || !fits;
 }
 $('grid').addEventListener('click', e => {
