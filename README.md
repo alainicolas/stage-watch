@@ -2,6 +2,9 @@
 
 Envoyer des messages courts à des participants sur scène (montres LilyGO T-Watch S3) et les afficher au public.
 
+## Télécharger (sans rien installer)
+👉 **[Dernière version : Mac et Windows](https://github.com/alainicolas/stage-watch/releases/latest)**. Le mode d'emploi pas à pas est sur la page de téléchargement.
+
 ## Lancer
 Double-clic sur `StageWatch-mac-arm64` (Mac M1/M2/M3…), `StageWatch-mac-intel` ou `StageWatch.exe` (Windows).
 Le navigateur s'ouvre sur l'interface du dirigeant.
@@ -34,3 +37,4 @@ Voir `firmware/README.md`.
 
 ## Développer
 `go run .` · build : `./build.sh` (Go ≥ 1.22).
+Nouvelle release : `./release/make-release.sh 0.2.0` (mode d'emploi publié : `release/NOTES.md`).
