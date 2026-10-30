@@ -536,6 +536,37 @@ func dataDir() string {
 	return d
 }
 
+// Annonce UDP en broadcast : les montres découvrent le laptop sans IP fixe.
+func announce(port int) {
+	msg := []byte(fmt.Sprintf("STAGEWATCH %d", port))
+	for {
+		targets := []string{"255.255.255.255"}
+		ifaces, _ := net.Interfaces()
+		for _, i := range ifaces {
+			if i.Flags&net.FlagUp == 0 || i.Flags&net.FlagLoopback != 0 {
+				continue
+			}
+			addrs, _ := i.Addrs()
+			for _, a := range addrs {
+				if ipn, ok := a.(*net.IPNet); ok && ipn.IP.To4() != nil {
+					b := make(net.IP, 4)
+					for k := 0; k < 4; k++ {
+						b[k] = ipn.IP.To4()[k] | ^ipn.Mask[len(ipn.Mask)-4+k]
+					}
+					targets = append(targets, b.String())
+				}
+			}
+		}
+		for _, t := range targets {
+			if c, err := net.Dial("udp4", t+":47808"); err == nil {
+				c.Write(msg)
+				c.Close()
+			}
+		}
+		time.Sleep(time.Second)
+	}
+}
+
 func main() {
 	log.SetFlags(0)
 	port := flag.Int("port", 8080, "port HTTP/WebSocket")
@@ -591,6 +622,8 @@ func main() {
 	}
 	fmt.Println("  Ferme cette fenêtre pour arrêter.")
 	fmt.Println("==============================================")
+
+	go announce(*port)
 
 	if !*noBrowser {
 		go func() {

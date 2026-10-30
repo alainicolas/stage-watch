@@ -24,5 +24,8 @@ Jusqu’à 8 montres (IDs 1 à 8). Les noms et photos (bouton ✎ dans l’admin
 
 Un message non confirmé est renvoyé automatiquement quand la montre se reconnecte.
 
+## Firmware des montres
+Voir `firmware/README.md`.
+
 ## Développer
 `go run .` · build : `./build.sh` (Go ≥ 1.22).
