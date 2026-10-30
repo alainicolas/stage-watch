@@ -1,7 +1,11 @@
 #pragma once
-// ======= À ADAPTER : réseau du kit =======
-#define WIFI_SSID      "StageWatch"
-#define WIFI_PASSWORD  "changeme123"
+// ======= Réseau du kit =======
+// Les identifiants Wi-Fi sont dans secrets.h (non versionné). À défaut, on utilise secrets.example.h.
+#if __has_include("secrets.h")
+#include "secrets.h"
+#else
+#include "secrets.example.h"
+#endif
 
 // Le serveur est trouvé automatiquement (annonce UDP du laptop).
 // Si la découverte échoue, on essaie cette adresse (laisser "" pour désactiver).

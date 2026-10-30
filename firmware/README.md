@@ -1,8 +1,8 @@
 # Firmware T-Watch S3
 
 ## Avant de flasher
-Dans `src/config.h`, mets le nom et le mot de passe du Wi-Fi du kit (le routeur dédié) :
-`WIFI_SSID` et `WIFI_PASSWORD`. Aucune IP à configurer : la montre trouve le laptop toute seule
+Copie `src/secrets.example.h` en `src/secrets.h` et mets-y le nom et le mot de passe du Wi-Fi du kit
+(`WIFI_SSID` et `WIFI_PASSWORD`). `secrets.h` n’est jamais envoyé sur git. Aucune IP à configurer : la montre trouve le laptop toute seule
 (annonce réseau envoyée par StageWatch chaque seconde).
 
 ## Flasher (Mac)

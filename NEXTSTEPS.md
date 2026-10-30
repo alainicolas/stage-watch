@@ -15,7 +15,7 @@ Commande en cours : 9–10 × LilyGO T-Watch S3 (+ routeur de voyage GL.iNet, c�
 ## 1. Routeur Wi-Fi
 - [ ] Le configurer avec un SSID et un mot de passe dédiés (ex. `StageWatch`), **en 2,4 GHz** (l'ESP32 ne fait pas le 5 GHz).
 - [ ] Pas besoin d'Internet, ni d'IP fixe : les montres trouvent le laptop toutes seules (annonce UDP sur le port 47808).
-- [ ] Mettre le SSID et le mot de passe dans `firmware/src/config.h`.
+- [ ] Copier `firmware/src/secrets.example.h` en `secrets.h` et y mettre le SSID et le mot de passe (non versionné).
 - Si l'isolation des clients (« AP isolation ») est active, la désactiver : sinon les montres ne voient pas le laptop.
 - **Sans routeur** : ça marche aussi sur n'importe quel Wi-Fi 2,4 GHz (chez soi, la salle, ou le partage de connexion d'un téléphone ; sur iPhone, activer « Optimiser la compatibilité »), tant que le laptop et les montres sont sur le **même réseau**.
   Ça peut bloquer sur : les Wi-Fi invités ou d'hôtel (isolation des clients), une page de connexion, un Wi-Fi d'entreprise (identifiant personnel), un réseau qui bloque l'annonce UDP (dans ce cas, mettre l'IP du laptop dans `SERVER_FALLBACK_HOST`), ou un réseau saturé.
