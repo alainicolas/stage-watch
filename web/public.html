@@ -45,7 +45,8 @@
 //   2. il rétrécit et vole vers la case de chaque destinataire
 //   3. la case s'allume et tremble à l'atterrissage, puis affiche le message.
 // Le serveur planifie la file (delay/dur) : la page suit ce planning, les envois rapprochés sont accélérés.
-const FRESH_MS = 20000;  // la case est allumée à la couleur du message pendant 20 s, puis garde un fin contour de cette couleur
+const FRESH_MS = 20000;  // la case est allumée à la couleur du message pendant 20 s…
+const TINT_MS = 60000;   // …puis garde un fin contour de cette couleur jusqu'à 1 min, puis retour au gris
 // Palette qui tourne : une couleur par message, vives sur fond noir et de clartés variées (lisibles par les daltoniens)
 const PALETTE = ['#ffd23f', '#3ad6ff', '#ff5fa2', '#7ee35a', '#b48cff', '#ff8a3d', '#f4f4f4', '#ff4d4d'];
 let paletteIdx = 0;
@@ -97,7 +98,11 @@ function applyMetrics(el, k) {
   el.style.setProperty('--cw', k.cw + 'px'); el.style.setProperty('--ch', k.ch + 'px'); el.style.setProperty('--fs', k.fs + 'px');
 }
 function sizeGrids() { const k = cellMetrics(); if (k) applyMetrics($('grid'), k) }
-setInterval(() => document.querySelectorAll('.c.fresh').forEach(c => { if (Date.now() - (fresh[c.dataset.id] || 0) >= FRESH_MS) c.classList.remove('fresh') }), 500);
+setInterval(() => document.querySelectorAll('.c.fresh, .c.tinted').forEach(c => {
+  const age = Date.now() - (fresh[c.dataset.id] || 0);
+  if (age >= FRESH_MS) c.classList.remove('fresh');
+  if (age >= TINT_MS) c.classList.remove('tinted');
+}), 500);
 addEventListener('resize', sizeGrids);
 addEventListener('dblclick', () => document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen());
 

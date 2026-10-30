@@ -686,8 +686,11 @@ func main() {
 		w.Header().Set("Content-Type", "application/json")
 		w.Write(enc(map[string]any{"ips": localIPs(), "port": *port}))
 	})
+	// Pages et scripts : jamais de cache, pour que le navigateur prenne toujours la version de l'exécutable lancé.
+	noCache := func(w http.ResponseWriter) { w.Header().Set("Cache-Control", "no-store") }
 	page := func(name string) http.HandlerFunc {
 		return func(w http.ResponseWriter, r *http.Request) {
+			noCache(w)
 			r.URL.Path = "/" + name + ".html"
 			files.ServeHTTP(w, r)
 		}
@@ -700,6 +703,7 @@ func main() {
 			http.Redirect(w, r, "/admin", http.StatusFound)
 			return
 		}
+		noCache(w)
 		files.ServeHTTP(w, r)
 	})
 
