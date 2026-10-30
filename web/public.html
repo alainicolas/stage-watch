@@ -14,6 +14,7 @@
 .c .n{font-size:3.2vh;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#d6d9de}
 .c .m{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;overflow:hidden}
 .c{--mc:var(--acc)}
+.c.tinted{border-color:color-mix(in srgb,var(--mc) 60%,#232327)}
 .c.fresh{border-color:var(--mc);background:color-mix(in srgb,var(--mc) 10%,#000);box-shadow:0 0 4vh color-mix(in srgb,var(--mc) 25%,transparent)}
 .c.fresh .n{color:var(--mc)}
 .c.land{animation:shake .5s ease-out}
@@ -44,9 +45,9 @@
 //   2. il rétrécit et vole vers la case de chaque destinataire
 //   3. la case s'allume et tremble à l'atterrissage, puis affiche le message.
 // Le serveur planifie la file (delay/dur) : la page suit ce planning, les envois rapprochés sont accélérés.
-const FRESH_MS = 20000;  // la case garde la couleur du message pendant 20 s
+const FRESH_MS = 20000;  // la case est allumée à la couleur du message pendant 20 s, puis garde un fin contour de cette couleur
 // Palette qui tourne : une couleur par message, vives sur fond noir et de clartés variées (lisibles par les daltoniens)
-const PALETTE = ['#ffd23f', '#3ad6ff', '#ff5fa2', '#7ee35a', '#ff8a3d', '#b48cff'];
+const PALETTE = ['#ffd23f', '#3ad6ff', '#ff5fa2', '#7ee35a', '#b48cff', '#ff8a3d', '#f4f4f4', '#ff4d4d'];
 let paletteIdx = 0;
 const nextColor = () => PALETTE[paletteIdx++ % PALETTE.length];
 let watches = [], fresh = {}, built = '';
@@ -75,6 +76,7 @@ function render() {
     setPhoto(ph, w);
     // pendant qu'une animation vole vers cette case, on garde l'ancien texte
     if (!holding[w.id]) setCellText(w.id, w.last ? w.last.text : '');
+    if (!w.last && !holding[w.id]) { delete fresh[w.id]; c.classList.remove('tinted') }  // écran effacé : plus de couleur
     c.classList.toggle('fresh', Date.now() - (fresh[w.id] || 0) < FRESH_MS);
   }
   sizeGrids();
@@ -115,7 +117,7 @@ function enqueue(b) {
 function land(id, text, color, shake = true) {
   setCellText(id, text);
   const c = cell(id); if (!c) return;
-  c.style.setProperty('--mc', color);
+  c.style.setProperty('--mc', color); c.classList.add('tinted');
   fresh[id] = Date.now(); c.classList.add('fresh');
   if (shake) { c.classList.remove('land'); void c.offsetWidth; c.classList.add('land') }
 }
