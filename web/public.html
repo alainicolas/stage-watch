@@ -2,40 +2,54 @@
 <html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>StageWatch · Public</title>
 <style>
-:root{--bg:#000;--fg:#fff;--mut:#7a7f88;--acc:#ffd23f}
+:root{--bg:#000;--card:#0d0d0f;--line:#232327;--fg:#fff;--mut:#8a8f98;--acc:#ffd23f}
 *{box-sizing:border-box}html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);font-family:system-ui,-apple-system,Segoe UI,sans-serif;overflow:hidden;cursor:none}
-#grid{display:grid;height:100vh;padding:2vh 2vw;gap:1.5vh 1.5vw;grid-template-columns:repeat(var(--cols),1fr)}
-.c{border:2px solid #222;border-radius:1.5vh;padding:2vh 1.5vw;display:flex;flex-direction:column;min-height:0;transition:border-color .4s,background .4s}
-.c .n{font-size:2.6vh;color:var(--mut);font-weight:600;letter-spacing:.02em}
-.c .m{flex:1;display:flex;align-items:center;justify-content:center;text-align:center;font-weight:800;line-height:1.1;overflow:hidden;word-break:break-word}
-.c.fresh{border-color:var(--acc);background:#1a1500}.c.fresh .n{color:var(--acc)}
+/* 8 cases strictement identiques : 4 x 2 qui remplissent l'écran, quel que soit le contenu */
+#grid{display:grid;height:100vh;padding:2.5vh 2vw;gap:2vh 1.5vw;grid-template-columns:repeat(4,minmax(0,1fr));grid-template-rows:repeat(2,minmax(0,1fr))}
+.c{background:var(--card);border:3px solid var(--line);border-radius:2vh;padding:2vh 1.2vw;display:flex;flex-direction:column;gap:1.5vh;min-height:0;min-width:0;overflow:hidden;transition:border-color .5s,background .5s,box-shadow .5s}
+.c .hd{display:flex;align-items:center;gap:1vw;min-width:0;flex:none}
+.c .ph{width:9vh;height:9vh;border-radius:50%;flex:none;background:#222 center/cover;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:3.6vh;color:#666}
+.c .n{font-size:3.2vh;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#d6d9de}
+.c .m{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;text-align:center;font-weight:800;line-height:1.1;overflow:hidden;word-break:break-word;border-radius:1.2vh}
+.c.fresh{border-color:var(--acc);background:#1c1700;box-shadow:0 0 4vh #ffd23f40}
+.c.fresh .n{color:var(--acc)}
 .c.fresh .m{animation:pop .6s ease-out}
-@keyframes pop{0%{transform:scale(.6);opacity:0}60%{transform:scale(1.06);opacity:1}100%{transform:scale(1)}}
+@keyframes pop{0%{transform:scale(.6);opacity:0}60%{transform:scale(1.05);opacity:1}100%{transform:scale(1)}}
 #off{position:fixed;bottom:1vh;right:1vw;color:#f2555a;font-size:14px;display:none}
 </style></head><body>
 <div id="grid"></div><div id="off">connexion au serveur…</div>
 <script src="/common.js"></script>
 <script>
-// Chaque participant a sa case ; le dernier message reçu reste affiché, la case s'allume quand il arrive.
-const FRESH_MS = 8000; let watches = [], fresh = {};
+// Une case fixe par participant ; le dernier message reste affiché, la case s'allume à l'arrivée.
+const FRESH_MS = 8000; let watches = [], fresh = {}, built = '';
 connectWS('public', m => {
   if (m.type === 'state') { watches = m.watches; render() }
-  if (m.type === 'message') { fresh[m.message.to] = Date.now(); render() }
-  if (m.type === 'cleared') render();
+  if (m.type === 'message') { fresh[m.message.to] = Date.now(); render(m.message.to) }
 }, on => document.getElementById('off').style.display = on ? 'none' : 'block');
-function render() {
-  const n = watches.length || 1, cols = n <= 4 ? 2 : n <= 9 ? 3 : 4;
-  const g = document.getElementById('grid'); g.style.setProperty('--cols', cols);
-  g.innerHTML = watches.map(w => `<div class="c ${Date.now() - (fresh[w.id] || 0) < FRESH_MS ? 'fresh' : ''}" data-id="${w.id}">
-    <div class="n">${esc(w.name)}</div><div class="m">${w.last ? esc(w.last.text) : ''}</div></div>`).join('');
-  g.querySelectorAll('.m').forEach(fit);
+const initials = n => n.split(/\s+/).filter(Boolean).slice(0, 2).map(x => x[0].toUpperCase()).join('');
+function render(popId) {
+  const g = document.getElementById('grid');
+  const sig = watches.map(w => w.id).join(',');
+  if (sig !== built) { // structure créée une fois, puis mise à jour en place (pas de saut visuel)
+    g.innerHTML = watches.map(w => `<div class="c" data-id="${w.id}"><div class="hd"><div class="ph"></div><div class="n"></div></div><div class="m"></div></div>`).join('');
+    built = sig;
+  }
+  for (const w of watches) {
+    const c = g.querySelector(`[data-id="${w.id}"]`), ph = c.querySelector('.ph'), m = c.querySelector('.m');
+    c.querySelector('.n').textContent = w.name;
+    ph.style.backgroundImage = w.photo ? `url('${w.photo}')` : ''; ph.textContent = w.photo ? '' : initials(w.name);
+    const txt = w.last ? w.last.text : '';
+    if (m.textContent !== txt) { m.textContent = txt; fit(m) }
+    c.classList.toggle('fresh', Date.now() - (fresh[w.id] || 0) < FRESH_MS);
+    if (popId === w.id) { m.style.animation = 'none'; void m.offsetWidth; m.style.animation = '' }
+  }
 }
-function fit(el) { // plus grande police possible qui tient dans la case
-  if (!el.textContent) return; let lo = 10, hi = 400;
+function fit(el) { // plus grande police qui tient dans la case (la case, elle, ne bouge pas)
+  if (!el.textContent) return; let lo = 10, hi = 300;
   while (hi - lo > 1) { const mid = (lo + hi) >> 1; el.style.fontSize = mid + 'px'; (el.scrollHeight <= el.clientHeight && el.scrollWidth <= el.clientWidth) ? lo = mid : hi = mid }
   el.style.fontSize = lo + 'px';
 }
 setInterval(() => document.querySelectorAll('.c.fresh').forEach(c => { if (Date.now() - (fresh[c.dataset.id] || 0) >= FRESH_MS) c.classList.remove('fresh') }), 500);
-addEventListener('resize', render);
+addEventListener('resize', () => document.querySelectorAll('.m').forEach(fit));
 addEventListener('dblclick', () => document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen());
 </script></body></html>

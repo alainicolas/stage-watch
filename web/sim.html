@@ -67,7 +67,7 @@ function setScale() {
   document.documentElement.style.setProperty('--px', px);
 }
 const n = document.getElementById('n');
-for (let i = 1; i <= 9; i++) n.innerHTML += `<option ${i === 3 ? 'selected' : ''}>${i}</option>`;
+for (let i = 1; i <= 8; i++) n.innerHTML += `<option ${i === 3 ? 'selected' : ''}>${i}</option>`;
 function rebuild() { location.hash = n.value; location.reload() }
 n.onchange = rebuild;
 if (location.hash) n.value = location.hash.slice(1);

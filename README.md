@@ -14,12 +14,12 @@ Le navigateur s'ouvre sur l'interface du dirigeant.
 
 Premier lancement : macOS → clic droit › Ouvrir (app non signée). Windows → « Informations complémentaires › Exécuter quand même ». Autoriser l'accès réseau quand le pare-feu le demande.
 
-Les noms des participants sont enregistrés dans `stagewatch-config.json` et l'historique dans `logs/`, à côté de l'exécutable.
+Jusqu’à 8 montres (IDs 1 à 8). Les noms et photos (bouton ✎ dans l’admin) sont enregistrés dans `stagewatch-config.json` et `photos/` et l'historique dans `logs/`, à côté de l'exécutable.
 
 ## Protocole (JSON sur WebSocket `/ws?role=watch|admin|public`)
 - montre → serveur : `{type:"hello",id,battery}` · `{type:"hb",battery}` · `{type:"ack",msgId}`
 - serveur → montre : `{type:"msg",msgId,text}` · `{type:"clear"}`
-- admin → serveur : `{type:"send",targets:[1,3]|"all",text}` · `{type:"clear",targets}` · `{type:"rename",id,name}`
+- admin → serveur : `{type:"send",targets:[1,3]|"all",text}` · `{type:"clear",targets}` · `{type:"rename",id,name}` ; photo : `POST|DELETE /api/photo?id=N`
 - serveur → admin/public : `state`, `message`, `ack`, `cleared`
 
 Un message non confirmé est renvoyé automatiquement quand la montre se reconnecte.

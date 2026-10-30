@@ -4,55 +4,85 @@
 <style>
 :root{--bg:#111418;--panel:#1b2027;--line:#2c333d;--fg:#e8ecf1;--mut:#8b95a3;--acc:#ffd23f;--ok:#3ecf8e;--warn:#f5a524;--bad:#f2555a}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.4 system-ui,-apple-system,Segoe UI,sans-serif}
-header{display:flex;align-items:center;gap:16px;padding:12px 20px;border-bottom:1px solid var(--line)}
+header{display:flex;align-items:center;gap:16px;padding:12px 20px;border-bottom:1px solid var(--line);flex-wrap:wrap}
 header h1{font-size:18px;margin:0}header .sp{flex:1}header a{color:var(--mut);font-size:13px}
 .dot{width:10px;height:10px;border-radius:50%;display:inline-block;background:var(--bad)}.dot.on{background:var(--ok)}
-main{display:grid;grid-template-columns:1fr 340px;gap:20px;padding:20px;max-width:1300px;margin:auto}
-@media(max-width:900px){main{grid-template-columns:1fr}}
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px}
-.w{background:var(--panel);border:2px solid var(--line);border-radius:12px;padding:10px 12px;cursor:pointer;user-select:none;position:relative}
-.w.sel{border-color:var(--acc);box-shadow:0 0 0 1px var(--acc)}
-.w.off{opacity:.55}
-.w .top{display:flex;align-items:center;gap:8px;font-weight:600}
-.w .num{background:#000;color:var(--acc);border-radius:6px;padding:0 7px;font-size:14px}
-.w .name{flex:1;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
-.w .meta{color:var(--mut);font-size:12px;margin-top:4px;display:flex;justify-content:space-between}
-.w .last{margin-top:6px;font-size:13px;min-height:18px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.st{font-size:12px;font-weight:600}.st.ok{color:var(--ok)}.st.wait{color:var(--warn)}.st.no{color:var(--bad)}
+main{display:grid;grid-template-columns:1fr 320px;gap:20px;padding:20px;max-width:1400px;margin:auto}
+@media(max-width:1000px){main{grid-template-columns:1fr}}
+/* 8 cases identiques : 4 x 2, hauteur fixe */
+.grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+@media(max-width:700px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.w{background:var(--panel);border:2px solid var(--line);border-radius:14px;padding:12px;cursor:pointer;user-select:none;height:190px;display:flex;flex-direction:column;gap:8px;position:relative;transition:border-color .15s}
+.w:hover{border-color:#47505d}
+.w.sel{border-color:var(--acc);box-shadow:0 0 0 1px var(--acc);background:#1f1d12}
+.w.off .ph,.w.off .name{opacity:.45}
+.w .top{display:flex;align-items:center;gap:10px;min-width:0}
+.ph{width:48px;height:48px;border-radius:50%;flex:none;background:#2a313b center/cover;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:18px;color:var(--mut);position:relative}
+.ph .num{position:absolute;bottom:-4px;right:-4px;background:#000;color:var(--acc);border-radius:6px;font-size:11px;padding:0 5px;line-height:16px}
+.w .who{min-width:0;flex:1}
+.w .name{font-weight:700;font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.w .meta{font-size:12px;display:flex;gap:8px;color:var(--mut)}
+.w .edit{position:absolute;top:8px;right:8px;background:none;border:none;color:var(--mut);padding:4px;font-size:15px;opacity:0}
+.w:hover .edit{opacity:1}.w .edit:hover{color:var(--fg)}
+.w .last{flex:1;min-height:0;background:#0b0d10;border-radius:8px;padding:8px 10px;font-size:15px;font-weight:600;overflow:hidden;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;word-break:break-word}
+.w .last.empty{color:#444;font-weight:400}
+.w .lt{font-size:11px;color:var(--mut);display:flex;justify-content:space-between}
+.st.ok{color:var(--ok)}.st.wait{color:var(--warn)}.st.no{color:var(--bad)}
 .bat.low{color:var(--bad);font-weight:700}
-.bar{display:flex;gap:8px;margin:14px 0 8px;flex-wrap:wrap}
+.bar{display:flex;gap:8px;margin:14px 0 10px;flex-wrap:wrap}
 button{background:#2a313b;color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:8px 12px;font:inherit;cursor:pointer}
 button:hover{background:#343c48}button.primary{background:var(--acc);color:#111;border:none;font-weight:700;font-size:17px;padding:12px 22px}
-button.primary:disabled{opacity:.4;cursor:default}
+button.primary:disabled{opacity:.4;cursor:default}button.danger{color:var(--bad)}
 .compose{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px}
-textarea{width:100%;background:#0b0d10;color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:12px;font:22px/1.3 system-ui,sans-serif;resize:none;height:96px}
-textarea:focus{outline:2px solid var(--acc)}
+textarea{width:100%;background:#0b0d10;color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:12px;font:22px/1.3 system-ui,sans-serif;resize:none;height:90px}
+textarea:focus,input:focus{outline:2px solid var(--acc)}
 .row{display:flex;align-items:center;gap:12px;margin-top:10px}.row .sp{flex:1}.cnt{color:var(--mut);font-size:13px}.cnt.over{color:var(--bad)}
 .to{color:var(--mut);font-size:14px;margin-bottom:8px}.to b{color:var(--fg)}
-aside{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px;max-height:calc(100vh - 100px);overflow:auto}
-aside h2{font-size:14px;margin:0 0 10px;color:var(--mut);text-transform:uppercase;letter-spacing:.05em}
+aside{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px;max-height:calc(100vh - 100px);overflow:auto;position:sticky;top:20px}
+aside h2{font-size:13px;margin:0 0 10px;color:var(--mut);text-transform:uppercase;letter-spacing:.05em}
 .h{border-bottom:1px solid var(--line);padding:8px 0;font-size:14px}.h .t{color:var(--mut);font-size:12px}
 .hint{color:var(--mut);font-size:12px;margin-top:8px}
+dialog{background:var(--panel);color:var(--fg);border:1px solid var(--line);border-radius:14px;padding:20px;width:340px}
+dialog::backdrop{background:#000a}
+dialog h3{margin:0 0 14px}
+dialog .bigph{width:120px;height:120px;border-radius:50%;margin:0 auto 12px;background:#2a313b center/cover;display:flex;align-items:center;justify-content:center;font-size:40px;font-weight:700;color:var(--mut)}
+dialog input[type=text]{width:100%;background:#0b0d10;color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:10px;font:inherit;font-size:17px}
+dialog .btns{display:flex;gap:8px;justify-content:center;margin:10px 0 16px;flex-wrap:wrap}
+dialog .end{display:flex;justify-content:flex-end;gap:8px;margin-top:16px}
 </style></head><body>
 <header><span class="dot" id="conn"></span><h1>StageWatch · Dirigeant</h1><span class="sp"></span>
-<span id="ips" class="hint"></span><a href="/public" target="_blank">Page public ↗</a><a href="/sim" target="_blank">Simulateur ↗</a></header>
+<span id="ips" class="hint" style="margin:0"></span><a href="/public" target="_blank">Page public ↗</a><a href="/sim" target="_blank">Simulateur ↗</a></header>
 <main>
 <section>
   <div class="grid" id="grid"></div>
   <div class="bar">
     <button id="all">Tout sélectionner</button><button id="none">Aucun</button>
-    <button id="clr" title="Efface l'écran des montres sélectionnées">Effacer l'écran</button>
+    <button id="clr" title="Efface l'écran des montres sélectionnées (et la case public)">Effacer l'écran</button>
   </div>
   <div class="compose">
     <div class="to" id="to"></div>
-    <textarea id="txt" maxlength="120" placeholder="Message… (Entrée pour envoyer, Maj+Entrée = retour ligne)"></textarea>
+    <textarea id="txt" maxlength="100" placeholder="Message… (Entrée pour envoyer, Maj+Entrée = retour ligne)"></textarea>
     <div class="row"><span class="cnt" id="cnt">0 / 100</span><span class="sp"></span>
       <button class="primary" id="send" disabled>Envoyer</button></div>
-    <div class="hint">Clic = sélectionner · Double-clic sur un nom = renommer · Touches 1–9 (hors saisie) = sélection rapide</div>
+    <div class="hint">Clic = sélectionner · ✎ = nom et photo · Touches 1–8 (hors saisie) = sélection rapide · Échap = tout désélectionner</div>
   </div>
 </section>
 <aside><h2>Historique</h2><div id="hist"></div></aside>
 </main>
+
+<dialog id="dlg">
+  <h3 id="dlgT"></h3>
+  <div class="bigph" id="dlgPh"></div>
+  <div class="btns">
+    <button id="pick">Choisir une photo…</button>
+    <button id="rmph" class="danger">Retirer la photo</button>
+    <input type="file" id="file" accept="image/*" hidden>
+  </div>
+  <label class="hint">Nom affiché (admin + public)</label>
+  <input type="text" id="dlgName" maxlength="40">
+  <div class="end"><button id="dlgCancel">Annuler</button><button class="primary" id="dlgOk" style="font-size:15px;padding:8px 18px">Enregistrer</button></div>
+</dialog>
+
 <script src="/common.js"></script>
 <script>
 let state = { watches: [], history: [] }; const sel = new Set();
@@ -60,21 +90,28 @@ const $ = id => document.getElementById(id);
 const ws = connectWS('admin', m => { if (m.type === 'state') { state = m; render() } }, on => $('conn').classList.toggle('on', on));
 fetch('/api/info').then(r => r.json()).then(i => $('ips').textContent = 'IP : ' + i.ips.join(', ') + ' · port ' + i.port);
 
+const initials = n => n.split(/\s+/).filter(Boolean).slice(0, 2).map(x => x[0].toUpperCase()).join('');
+const phStyle = w => w.photo ? `style="background-image:url('${w.photo}')"` : '';
 function status(w) {
   if (!w.online) return '<span class="st no">● hors ligne</span>';
-  if (w.last && !w.last.acked) return '<span class="st wait">● en attente…</span>';
+  if (w.last && !w.last.acked) return '<span class="st wait">● en attente</span>';
   return '<span class="st ok">● connectée</span>';
 }
 function render() {
   $('grid').innerHTML = state.watches.map(w => `
     <div class="w ${sel.has(w.id) ? 'sel' : ''} ${w.online ? '' : 'off'}" data-id="${w.id}">
-      <div class="top"><span class="num">${w.id}</span><span class="name" data-id="${w.id}">${esc(w.name)}</span></div>
-      <div class="meta">${status(w)}<span class="bat ${w.battery >= 0 && w.battery < 20 ? 'low' : ''}">${w.battery >= 0 ? '🔋 ' + w.battery + '%' : ''}${w.sim ? ' · sim' : ''}</span></div>
-      <div class="last">${w.last ? (w.last.acked ? '✓ ' : '… ') + esc(w.last.text) : '<span style="color:var(--mut)">—</span>'}</div>
+      <button class="edit" data-edit="${w.id}" title="Nom et photo">✎</button>
+      <div class="top">
+        <div class="ph" ${phStyle(w)}>${w.photo ? '' : esc(initials(w.name))}<span class="num">${w.id}</span></div>
+        <div class="who"><div class="name">${esc(w.name)}</div>
+          <div class="meta">${status(w)}<span class="bat ${w.battery >= 0 && w.battery < 20 ? 'low' : ''}">${w.battery >= 0 ? '🔋' + w.battery + '%' : ''}</span>${w.sim ? '<span>sim</span>' : ''}</div></div>
+      </div>
+      <div class="last ${w.last ? '' : 'empty'}">${w.last ? esc(w.last.text) : 'Aucun message'}</div>
+      <div class="lt">${w.last ? `<span>${hhmm(w.last.time)}</span><span>${w.last.acked ? '<span class="st ok">✓ reçu</span>' : '<span class="st wait">… envoi</span>'}</span>` : '&nbsp;'}</div>
     </div>`).join('');
   const byId = Object.fromEntries(state.watches.map(w => [w.id, w]));
   $('hist').innerHTML = state.history.slice().reverse().map(h => `
-    <div class="h"><div class="t">${hhmm(h.time)} → ${esc(byId[h.to]?.name || h.to)} ${h.acked ? '✓' : '<span style="color:var(--warn)">…</span>'}</div>${esc(h.text)}</div>`).join('');
+    <div class="h"><div class="t">${hhmm(h.time)} → ${esc(byId[h.to]?.name || h.to)} ${h.acked ? '✓' : '<span style="color:var(--warn)">…</span>'}</div>${esc(h.text)}</div>`).join('') || '<div class="hint">Rien encore.</div>';
   updateCompose();
 }
 function updateCompose() {
@@ -85,11 +122,9 @@ function updateCompose() {
   $('cnt').textContent = n + ' / 100'; $('cnt').classList.toggle('over', n > 100);
   $('send').disabled = !names.length || !$('txt').value.trim();
 }
-$('grid').addEventListener('click', e => { const c = e.target.closest('.w'); if (!c) return; const id = +c.dataset.id; sel.has(id) ? sel.delete(id) : sel.add(id); render() });
-$('grid').addEventListener('dblclick', e => {
-  const n = e.target.closest('.name'); if (!n) return; const id = +n.dataset.id;
-  const cur = state.watches.find(w => w.id === id)?.name || '';
-  const v = prompt('Nom du participant ' + id + ' :', cur); if (v !== null) ws.send({ type: 'rename', id, name: v.trim() });
+$('grid').addEventListener('click', e => {
+  const ed = e.target.closest('[data-edit]'); if (ed) { openEdit(+ed.dataset.edit); return }
+  const c = e.target.closest('.w'); if (!c) return; const id = +c.dataset.id; sel.has(id) ? sel.delete(id) : sel.add(id); render();
 });
 $('all').onclick = () => { state.watches.forEach(w => sel.add(w.id)); render() };
 $('none').onclick = () => { sel.clear(); render() };
@@ -102,7 +137,45 @@ function send() {
 $('send').onclick = send;
 $('txt').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } });
 document.addEventListener('keydown', e => {
-  if (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT') return;
-  const k = +e.key; if (k >= 1 && k <= 9 && state.watches.some(w => w.id === k)) { sel.has(k) ? sel.delete(k) : sel.add(k); render() }
+  if ($('dlg').open || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT') return;
+  if (e.key === 'Escape') { sel.clear(); render(); return }
+  const k = +e.key; if (k >= 1 && k <= 8) { sel.has(k) ? sel.delete(k) : sel.add(k); render() }
 });
+
+// ---- Édition nom + photo ----
+let editId = 0, pendingPhoto = null, removePhoto = false;
+function setBig(url, name) { const b = $('dlgPh'); b.style.backgroundImage = url ? `url('${url}')` : ''; b.textContent = url ? '' : initials(name || '?') }
+function openEdit(id) {
+  const w = state.watches.find(x => x.id === id); editId = id; pendingPhoto = null; removePhoto = false;
+  $('dlgT').textContent = 'Montre ' + id; $('dlgName').value = w.name; setBig(w.photo, w.name); $('dlg').showModal(); $('dlgName').select();
+}
+$('pick').onclick = () => $('file').click();
+$('file').onchange = async () => {
+  const f = $('file').files[0]; $('file').value = ''; if (!f) return;
+  pendingPhoto = await squareJpeg(f, 512); removePhoto = false; setBig(URL.createObjectURL(pendingPhoto));
+};
+$('rmph').onclick = () => { pendingPhoto = null; removePhoto = true; setBig('', $('dlgName').value) };
+$('dlgCancel').onclick = () => $('dlg').close();
+$('dlgOk').onclick = async () => {
+  const id = editId, name = $('dlgName').value.trim();
+  ws.send({ type: 'rename', id, name });
+  try {
+    if (pendingPhoto) await fetch('/api/photo?id=' + id, { method: 'POST', body: pendingPhoto });
+    else if (removePhoto) await fetch('/api/photo?id=' + id, { method: 'DELETE' });
+  } catch (_) { alert("La photo n'a pas pu être enregistrée") }
+  $('dlg').close();
+};
+$('dlgName').addEventListener('keydown', e => { if (e.key === 'Enter') $('dlgOk').click() });
+// recadre au centre en carré et réduit -> fichier léger
+function squareJpeg(file, size) {
+  return new Promise((res, rej) => {
+    const img = new Image(); img.onerror = rej;
+    img.onload = () => {
+      const s = Math.min(img.width, img.height), c = document.createElement('canvas'); c.width = c.height = size;
+      c.getContext('2d').drawImage(img, (img.width - s) / 2, (img.height - s) / 2, s, s, 0, 0, size, size);
+      c.toBlob(res, 'image/jpeg', .88); URL.revokeObjectURL(img.src);
+    };
+    img.src = URL.createObjectURL(file);
+  });
+}
 </script></body></html>

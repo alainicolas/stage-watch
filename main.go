@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"io/fs"
 	"log"
 	"net"
@@ -31,7 +32,7 @@ const (
 	pongWait     = 30 * time.Second
 	pingInterval = 10 * time.Second
 	writeWait    = 5 * time.Second
-	defaultCount = 9
+	maxWatches   = 8
 )
 
 // ---------- Modèle ----------
@@ -53,12 +54,13 @@ type Watch struct {
 	LastSeen int64    `json:"lastSeen"`
 	Last     *Message `json:"last"`
 	Sim      bool     `json:"sim"`
+	Photo    string   `json:"photo"`
 	conn     *client
 }
 
 type Config struct {
-	Count int               `json:"count"`
-	Names map[string]string `json:"names"`
+	Names  map[string]string `json:"names"`
+	Photos map[string]int64  `json:"photos"` // id -> version (anti-cache)
 }
 
 type client struct {
@@ -76,24 +78,26 @@ type Hub struct {
 	nextID  int64
 	cfg     Config
 	cfgPath string
+	dataDir string
 	logFile *os.File
 }
 
 func newHub(dataDir string) *Hub {
 	h := &Hub{watches: map[int]*Watch{}, viewers: map[*client]bool{}, nextID: time.Now().UnixMilli()}
 	h.cfgPath = filepath.Join(dataDir, "stagewatch-config.json")
-	h.cfg = Config{Count: defaultCount, Names: map[string]string{}}
+	h.dataDir = dataDir
+	h.cfg = Config{Names: map[string]string{}, Photos: map[string]int64{}}
 	if b, err := os.ReadFile(h.cfgPath); err == nil {
 		_ = json.Unmarshal(b, &h.cfg)
 		if h.cfg.Names == nil {
 			h.cfg.Names = map[string]string{}
 		}
-		if h.cfg.Count <= 0 {
-			h.cfg.Count = defaultCount
+		if h.cfg.Photos == nil {
+			h.cfg.Photos = map[string]int64{}
 		}
 	}
-	for i := 1; i <= h.cfg.Count; i++ {
-		h.watches[i] = &Watch{ID: i, Name: h.nameOf(i), Battery: -1}
+	for i := 1; i <= maxWatches; i++ {
+		h.watches[i] = &Watch{ID: i, Name: h.nameOf(i), Battery: -1, Photo: h.photoOf(i)}
 	}
 	_ = os.MkdirAll(filepath.Join(dataDir, "logs"), 0o755)
 	lp := filepath.Join(dataDir, "logs", "show-"+time.Now().Format("2006-01-02")+".log")
@@ -108,6 +112,74 @@ func (h *Hub) nameOf(id int) string {
 		return n
 	}
 	return fmt.Sprintf("Participant %d", id)
+}
+
+func (h *Hub) photoOf(id int) string {
+	if v, ok := h.cfg.Photos[strconv.Itoa(id)]; ok {
+		return fmt.Sprintf("/photo/%d?v=%d", id, v)
+	}
+	return ""
+}
+
+func (h *Hub) photoPath(id int) string {
+	return filepath.Join(h.dataDir, "photos", strconv.Itoa(id)+".img")
+}
+
+// POST (corps = image, déjà réduite par l'admin) ou DELETE
+func (h *Hub) servePhotoAPI(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.Atoi(r.URL.Query().Get("id"))
+	if err != nil || id < 1 || id > maxWatches {
+		http.Error(w, "id invalide", 400)
+		return
+	}
+	switch r.Method {
+	case http.MethodPost:
+		b, err := io.ReadAll(io.LimitReader(r.Body, 5<<20))
+		if err != nil || len(b) == 0 {
+			http.Error(w, "image invalide", 400)
+			return
+		}
+		ct := http.DetectContentType(b)
+		if ct != "image/jpeg" && ct != "image/png" && ct != "image/webp" {
+			http.Error(w, "format non supporté", 400)
+			return
+		}
+		_ = os.MkdirAll(filepath.Join(h.dataDir, "photos"), 0o755)
+		if err := os.WriteFile(h.photoPath(id), b, 0o644); err != nil {
+			http.Error(w, err.Error(), 500)
+			return
+		}
+		h.mu.Lock()
+		h.cfg.Photos[strconv.Itoa(id)] = time.Now().UnixMilli()
+	case http.MethodDelete:
+		_ = os.Remove(h.photoPath(id))
+		h.mu.Lock()
+		delete(h.cfg.Photos, strconv.Itoa(id))
+	default:
+		http.Error(w, "méthode non autorisée", 405)
+		return
+	}
+	h.watches[id].Photo = h.photoOf(id)
+	h.saveCfg()
+	h.pushState()
+	h.mu.Unlock()
+	w.WriteHeader(204)
+}
+
+func (h *Hub) servePhoto(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.Atoi(filepath.Base(r.URL.Path))
+	if err != nil || id < 1 || id > maxWatches {
+		http.NotFound(w, r)
+		return
+	}
+	b, err := os.ReadFile(h.photoPath(id))
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	w.Header().Set("Content-Type", http.DetectContentType(b))
+	w.Header().Set("Cache-Control", "max-age=31536000")
+	w.Write(b)
 }
 
 func (h *Hub) saveCfg() {
@@ -204,11 +276,7 @@ func (h *Hub) clearWatches(targets []int) {
 func (h *Hub) watchHello(c *client, id, battery int, sim bool) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	w, ok := h.watches[id]
-	if !ok {
-		w = &Watch{ID: id, Name: h.nameOf(id), Battery: -1}
-		h.watches[id] = w
-	}
+	w := h.watches[id]
 	if w.conn != nil && w.conn != c {
 		// une autre montre avec le même ID : on garde la plus récente
 		h.logf("ATTENTION : deux montres annoncent l'ID %d, la plus récente remplace l'ancienne", id)
@@ -385,7 +453,7 @@ func (h *Hub) handle(c *client, m inMsg) {
 	case "watch":
 		switch m.Type {
 		case "hello":
-			if m.ID > 0 && m.ID < 100 {
+			if m.ID >= 1 && m.ID <= maxWatches {
 				h.watchHello(c, m.ID, bat, m.Sim)
 			}
 		case "hb":
@@ -409,7 +477,11 @@ func (h *Hub) handle(c *client, m inMsg) {
 		case "rename":
 			h.mu.Lock()
 			if w, ok := h.watches[m.ID]; ok {
-				h.cfg.Names[strconv.Itoa(m.ID)] = m.Name
+				name := []rune(m.Name)
+				if len(name) > 40 {
+					name = name[:40]
+				}
+				h.cfg.Names[strconv.Itoa(m.ID)] = string(name)
 				w.Name = h.nameOf(m.ID)
 				h.saveCfg()
 				h.pushState()
@@ -476,6 +548,8 @@ func main() {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/ws", h.serveWS)
+	mux.HandleFunc("/api/photo", h.servePhotoAPI)
+	mux.HandleFunc("/photo/", h.servePhoto)
 	mux.HandleFunc("/api/info", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Write(enc(map[string]any{"ips": localIPs(), "port": *port}))
