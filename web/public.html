@@ -10,7 +10,7 @@
 .c .hd{display:flex;align-items:center;gap:1vw;min-width:0;flex:none}
 .c .ph{width:9vh;height:9vh;border-radius:50%;flex:none;background:#222 center/cover;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:3.6vh;color:#666}
 .c .n{font-size:3.2vh;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#d6d9de}
-.c .m{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;text-align:center;font-weight:800;line-height:1.1;overflow:hidden;word-break:break-word;border-radius:1.2vh}
+.c .m{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;overflow:hidden}
 .c.fresh{border-color:var(--acc);background:#1c1700;box-shadow:0 0 4vh #ffd23f40}
 .c.fresh .n{color:var(--acc)}
 .c.fresh .m{animation:pop .6s ease-out}
@@ -31,7 +31,7 @@ function render(popId) {
   const g = document.getElementById('grid');
   const sig = watches.map(w => w.id).join(',');
   if (sig !== built) { // structure créée une fois, puis mise à jour en place (pas de saut visuel)
-    g.innerHTML = watches.map(w => `<div class="c" data-id="${w.id}"><div class="hd"><div class="ph"></div><div class="n"></div></div><div class="m"></div></div>`).join('');
+    g.innerHTML = watches.map(w => `<div class="c" data-id="${w.id}"><div class="hd"><div class="ph"></div><div class="n"></div></div><div class="m"><div class="tgrid"></div></div></div>`).join('');
     built = sig;
   }
   for (const w of watches) {
@@ -39,17 +39,20 @@ function render(popId) {
     c.querySelector('.n').textContent = w.name;
     ph.style.backgroundImage = w.photo ? `url('${w.photo}')` : ''; ph.textContent = w.photo ? '' : initials(w.name);
     const txt = w.last ? w.last.text : '';
-    if (m.textContent !== txt) { m.textContent = txt; fit(m) }
+    if (m.dataset.t !== txt) { m.dataset.t = txt; renderGrid(m.firstChild, txt) }
     c.classList.toggle('fresh', Date.now() - (fresh[w.id] || 0) < FRESH_MS);
     if (popId === w.id) { m.style.animation = 'none'; void m.offsetWidth; m.style.animation = '' }
   }
+  sizeGrids();
 }
-function fit(el) { // plus grande police qui tient dans la case (la case, elle, ne bouge pas)
-  if (!el.textContent) return; let lo = 10, hi = 300;
-  while (hi - lo > 1) { const mid = (lo + hi) >> 1; el.style.fontSize = mid + 'px'; (el.scrollHeight <= el.clientHeight && el.scrollWidth <= el.clientWidth) ? lo = mid : hi = mid }
-  el.style.fontSize = lo + 'px';
+// Même taille de caractère pour toutes les cases (proportions de l'écran de la montre : 19 x 27)
+function sizeGrids() {
+  const m = document.querySelector('.c .m'); if (!m) return;
+  const cw = Math.floor(Math.min(m.clientWidth / 12, (m.clientHeight / 8) * 19 / 27));
+  const g = document.getElementById('grid');
+  g.style.setProperty('--cw', cw + 'px'); g.style.setProperty('--ch', Math.floor(cw * 27 / 19) + 'px'); g.style.setProperty('--fs', Math.floor(cw * 1.55) + 'px');
 }
 setInterval(() => document.querySelectorAll('.c.fresh').forEach(c => { if (Date.now() - (fresh[c.dataset.id] || 0) >= FRESH_MS) c.classList.remove('fresh') }), 500);
-addEventListener('resize', () => document.querySelectorAll('.m').forEach(fit));
+addEventListener('resize', sizeGrids);
 addEventListener('dblclick', () => document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen());
 </script></body></html>

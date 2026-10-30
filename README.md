@@ -18,7 +18,7 @@ Jusqu’à 8 montres (IDs 1 à 8). Les noms et photos (bouton ✎ dans l’admin
 
 ## Protocole (JSON sur WebSocket `/ws?role=watch|admin|public`)
 - montre → serveur : `{type:"hello",id,battery}` · `{type:"hb",battery}` · `{type:"ack",msgId}`
-- serveur → montre : `{type:"msg",msgId,text}` · `{type:"clear"}`
+- serveur → montre : `{type:"msg",msgId,text}` (96 caractères max, affichés sur une grille fixe de 12 × 8) · `{type:"clear"}`
 - admin → serveur : `{type:"send",targets:[1,3]|"all",text}` · `{type:"clear",targets}` · `{type:"rename",id,name}` ; photo : `POST|DELETE /api/photo?id=N`
 - serveur → admin/public : `state`, `message`, `ack`, `cleared`
 

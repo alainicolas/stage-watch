@@ -15,7 +15,8 @@ input,select,button{font:inherit;background:#2a313b;color:var(--fg);border:1px s
 /* écran : 240x240 px logiques, mis à l'échelle */
 .screen{width:240px;height:240px;background:#000;overflow:hidden;position:relative;transform:scale(var(--px));transform-origin:0 0}
 .screenWrap{width:calc(240px*var(--px));height:calc(240px*var(--px));overflow:hidden;border-radius:4px}
-.msg{position:absolute;inset:8px;display:flex;align-items:center;justify-content:center;text-align:center;color:#fff;font-weight:800;line-height:1.08;word-break:break-word;font-family:Arial,Helvetica,sans-serif}
+/* zone texte : 12 x 8 cases de 19 x 27 px, à x=6 y=22, comme sur la montre */
+.msg{position:absolute;left:6px;top:22px;color:#fff;--cw:19px;--ch:27px;--fs:29px}
 .status{position:absolute;top:2px;left:6px;right:6px;display:flex;justify-content:space-between;font:11px Arial;color:#666}
 .idle{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font:bold 64px Arial;color:#333}
 .lbl{font-size:12px;color:var(--mut)}
@@ -31,13 +32,13 @@ input,select,button{font:inherit;background:#2a313b;color:var(--fg);border:1px s
 <div id="watches"></div>
 <script src="/common.js"></script>
 <script>
-// Logique d'affichage identique à celle prévue dans le firmware : plus grande taille de police qui tient, écran éteint (ID en gris) au repos.
+// Affichage identique au firmware : grille fixe 12 x 8 (voir renderGrid dans common.js).
 const ac = new (window.AudioContext || window.webkitAudioContext)();
 function beep() { if (!document.getElementById('snd').checked) return; const o = ac.createOscillator(), g = ac.createGain(); o.frequency.value = 180; o.type = 'square'; g.gain.value = .05; o.connect(g); g.connect(ac.destination); o.start(); o.stop(ac.currentTime + .35) }
 const sims = [];
 function makeWatch(id) {
   const el = document.createElement('div'); el.className = 'watch';
-  el.innerHTML = `<div class="case"><div class="screenWrap"><div class="screen"><div class="status"><span class="wifi">⦿ …</span><span class="bat"></span></div><div class="idle">${id}</div><div class="msg"></div></div></div></div><div class="lbl">Montre ${id}</div>`;
+  el.innerHTML = `<div class="case"><div class="screenWrap"><div class="screen"><div class="status"><span class="wifi">⦿ …</span><span class="bat"></span></div><div class="idle">${id}</div><div class="msg tgrid"></div></div></div></div><div class="lbl">Montre ${id}</div>`;
   document.getElementById('watches').appendChild(el);
   let battery = 60 + Math.floor(Math.random() * 40);
   const msgEl = el.querySelector('.msg'), idle = el.querySelector('.idle'), wifi = el.querySelector('.wifi'), batEl = el.querySelector('.bat');
@@ -52,13 +53,8 @@ function makeWatch(id) {
   }, on => { wifi.textContent = on ? '⦿ ok' : '⦿ …'; wifi.style.color = on ? '#3ecf8e' : '#f2555a' });
   sock.onopen = () => sock.send({ type: 'hello', id, battery, sim: true });
   const hb = setInterval(() => { if (Math.random() < .1) battery = Math.max(0, battery - 1); batEl.textContent = battery + '%'; sock.send({ type: 'hb', battery }) }, 10000);
-  function show(t) { msgEl.textContent = t; idle.style.display = t ? 'none' : 'flex'; fit(msgEl) }
+  function show(t) { renderGrid(msgEl, t); idle.style.display = t ? 'none' : 'flex' }
   return { el, close() { clearInterval(hb); sock.onclose = null } };
-}
-function fit(el) {
-  if (!el.textContent) return; let lo = 12, hi = 120;
-  while (hi - lo > 1) { const mid = (lo + hi) >> 1; el.style.fontSize = mid + 'px'; (el.scrollHeight <= el.clientHeight && el.scrollWidth <= el.clientWidth) ? lo = mid : hi = mid }
-  el.style.fontSize = lo + 'px';
 }
 function setScale() {
   const v = document.getElementById('scale').value;

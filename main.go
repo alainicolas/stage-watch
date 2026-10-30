@@ -28,7 +28,7 @@ import (
 var webFS embed.FS
 
 const (
-	maxText      = 120
+	maxText      = 96
 	pongWait     = 30 * time.Second
 	pingInterval = 10 * time.Second
 	writeWait    = 5 * time.Second

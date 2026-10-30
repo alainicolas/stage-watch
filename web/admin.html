@@ -37,6 +37,9 @@ button.primary:disabled{opacity:.4;cursor:default}button.danger{color:var(--bad)
 textarea{width:100%;background:#0b0d10;color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:12px;font:22px/1.3 system-ui,sans-serif;resize:none;height:90px}
 textarea:focus,input:focus{outline:2px solid var(--acc)}
 .row{display:flex;align-items:center;gap:12px;margin-top:10px}.row .sp{flex:1}.cnt{color:var(--mut);font-size:13px}.cnt.over{color:var(--bad)}
+.prevrow{display:flex;align-items:center;gap:14px;margin-top:10px}
+.prev{background:#000;border:6px solid #2b2b2e;border-radius:18px;width:252px;height:252px;padding:22px 6px 0;color:#fff;--cw:19px;--ch:27px;--fs:29px;flex:none}
+.prev.bad{border-color:var(--bad)}
 .to{color:var(--mut);font-size:14px;margin-bottom:8px}.to b{color:var(--fg)}
 aside{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px;max-height:calc(100vh - 100px);overflow:auto;position:sticky;top:20px}
 aside h2{font-size:13px;margin:0 0 10px;color:var(--mut);text-transform:uppercase;letter-spacing:.05em}
@@ -61,8 +64,9 @@ dialog .end{display:flex;justify-content:flex-end;gap:8px;margin-top:16px}
   </div>
   <div class="compose">
     <div class="to" id="to"></div>
-    <textarea id="txt" maxlength="100" placeholder="Message… (Entrée pour envoyer, Maj+Entrée = retour ligne)"></textarea>
-    <div class="row"><span class="cnt" id="cnt">0 / 100</span><span class="sp"></span>
+    <textarea id="txt" placeholder="Message… (Entrée pour envoyer, Maj+Entrée = retour ligne)"></textarea>
+    <div class="prevrow"><div class="prev"><div class="tgrid" id="prev"></div></div><div class="hint" id="prevHint">Aperçu exact de la montre (12 × 8 caractères)</div></div>
+    <div class="row"><span class="cnt" id="cnt">0 / 96</span><span class="sp"></span>
       <button class="primary" id="send" disabled>Envoyer</button></div>
     <div class="hint">Clic = sélectionner · ✎ = nom et photo · Touches 1–8 (hors saisie) = sélection rapide · Échap = tout désélectionner</div>
   </div>
@@ -118,9 +122,12 @@ function updateCompose() {
   const names = state.watches.filter(w => sel.has(w.id)).map(w => w.name);
   $('to').innerHTML = names.length === 0 ? 'Choisis un ou plusieurs destinataires ci-dessus'
     : names.length === state.watches.length ? 'À : <b>Tout le monde</b>' : 'À : <b>' + names.map(esc).join(', ') + '</b>';
-  const n = [...$('txt').value].length;
-  $('cnt').textContent = n + ' / 100'; $('cnt').classList.toggle('over', n > 100);
-  $('send').disabled = !names.length || !$('txt').value.trim();
+  const v = $('txt').value, n = [...v.trim()].length, fits = wrapGrid(v).ok && n <= GRID.max;
+  renderGrid($('prev'), v);
+  $('cnt').textContent = n + ' / ' + GRID.max; $('cnt').classList.toggle('over', !fits);
+  $('prev').parentElement.classList.toggle('bad', !fits);
+  $('prevHint').textContent = fits ? 'Aperçu exact de la montre (12 × 8 caractères)' : 'Trop long pour l\'écran : raccourcis le message';
+  $('send').disabled = !names.length || !v.trim() || !fits;
 }
 $('grid').addEventListener('click', e => {
   const ed = e.target.closest('[data-edit]'); if (ed) { openEdit(+ed.dataset.edit); return }
@@ -131,7 +138,7 @@ $('none').onclick = () => { sel.clear(); render() };
 $('clr').onclick = () => { if (sel.size) ws.send({ type: 'clear', targets: [...sel] }) };
 $('txt').oninput = updateCompose;
 function send() {
-  const text = $('txt').value.trim(); if (!text || !sel.size) return;
+  const text = $('txt').value.trim(); if (!text || !sel.size || $('send').disabled) return;
   if (ws.send({ type: 'send', targets: [...sel], text })) { $('txt').value = ''; updateCompose() } else alert('Pas connecté au serveur');
 }
 $('send').onclick = send;

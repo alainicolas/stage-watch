@@ -47,13 +47,10 @@ volatile bool pmuIrq = false;
 bool hasDrv = false;
 uint8_t curBright = 0;
 
-// Polices (U8g2, avec accents français) de la plus grande à la plus petite
-struct FontDef { const uint8_t* f; };
-const FontDef FONTS[] = {
-  {u8g2_font_fub42_tf}, {u8g2_font_fub35_tf}, {u8g2_font_fub30_tf}, {u8g2_font_fub25_tf},
-  {u8g2_font_fub20_tf}, {u8g2_font_fub17_tf}, {u8g2_font_fub14_tf}, {u8g2_font_fub11_tf},
-};
-const int NFONTS = sizeof(FONTS) / sizeof(FONTS[0]);
+// Grille de texte FIXE : 12 colonnes x 8 lignes = 96 caractères (identique au simulateur et à la page public).
+// Police à chasse fixe (accents OK). Coupure entre les mots ; un mot de plus de 12 lettres est coupé.
+#define MSG_FONT  u8g2_font_inb24_mf
+const int COLS = 12, ROWS = 8, CELL_W = 19, CELL_H = 27, GRID_X = 6, GRID_Y = 22;
 
 const uint16_t C_BG = TFT_BLACK, C_TXT = TFT_WHITE, C_MUT = 0x7BEF, C_OK = 0x3E6F, C_BAD = 0xF2AA, C_ACC = 0xFE87;
 const int W = 240, H = 240, MARGIN = 6, TOPBAR = 18;
@@ -129,36 +126,32 @@ int batteryPercent() {
 }
 
 // ---------- Affichage ----------
-// Découpe en lignes avec une police donnée ; renvoie false si ça ne tient pas.
-bool layout(const String& txt, int fi, std::vector<String>& lines, int& lineH) {
-  u8f.setFont(FONTS[fi].f);
-  int asc = u8f.getFontAscent(), desc = -u8f.getFontDescent();
-  lineH = asc + desc + 4;
-  const int maxW = W - 2 * MARGIN, maxH = H - TOPBAR - MARGIN;
-  lines.clear();
-  String line = "", word = "";
-  auto width = [&](const String& s) { return (int)u8f.getUTF8Width(s.c_str()); };
-  auto flushWord = [&]() -> bool {
-    if (word.isEmpty()) return true;
-    String cand = line.isEmpty() ? word : line + " " + word;
-    if (width(cand) <= maxW) { line = cand; }
+// Découpe en lignes de COLS caractères max (UTF-8 : on compte les caractères, pas les octets).
+std::vector<std::vector<String>> wrapGrid(const String& txt) {
+  std::vector<std::vector<String>> lines;  // chaque ligne = liste de caractères UTF-8
+  std::vector<String> line, word;
+  auto flushWord = [&]() {
+    if (word.empty()) return;
+    if (!line.empty() && line.size() + 1 + word.size() <= (size_t)COLS) { line.push_back(" "); line.insert(line.end(), word.begin(), word.end()); }
     else {
-      if (!line.isEmpty()) lines.push_back(line);
-      if (width(word) > maxW) return false;  // mot trop long pour cette taille
+      if (!line.empty()) { lines.push_back(line); line.clear(); }
+      while (word.size() > (size_t)COLS) { lines.emplace_back(word.begin(), word.begin() + COLS); word.erase(word.begin(), word.begin() + COLS); }
       line = word;
     }
-    word = "";
-    return true;
+    word.clear();
   };
-  for (size_t i = 0; i <= txt.length(); i++) {
-    char c = i < txt.length() ? txt[i] : ' ';
-    if (c == ' ' || c == '\n') {
-      if (!flushWord()) return false;
-      if (c == '\n') { lines.push_back(line); line = ""; }
-    } else word += c;
+  for (size_t i = 0; i < txt.length();) {
+    uint8_t c = txt[i];
+    int n = c < 0x80 ? 1 : (c >> 5) == 6 ? 2 : (c >> 4) == 14 ? 3 : (c >> 3) == 30 ? 4 : 1;
+    String ch = txt.substring(i, i + n); i += n;
+    if (ch == " " || ch == "\t") flushWord();
+    else if (ch == "\n") { flushWord(); lines.push_back(line); line.clear(); }
+    else word.push_back(ch);
   }
-  if (!line.isEmpty()) lines.push_back(line);
-  return (int)lines.size() * lineH <= maxH;
+  flushWord();
+  lines.push_back(line);
+  while (!lines.empty() && lines.back().empty()) lines.pop_back();
+  return lines;
 }
 
 void drawTopBar() {
@@ -185,18 +178,21 @@ void drawMessage() {
     u8f.print(s);
     return;
   }
-  std::vector<String> lines; int lineH = 0, fi = 0;
-  for (; fi < NFONTS; fi++) if (layout(curText, fi, lines, lineH)) break;
-  if (fi == NFONTS) { fi = NFONTS - 1; layout(curText, fi, lines, lineH); }  // au pire : coupé
-  u8f.setFont(FONTS[fi].f);
+  auto lines = wrapGrid(curText);
+  if ((int)lines.size() > ROWS) lines.resize(ROWS);
+  int r0 = (ROWS - (int)lines.size()) / 2;
+  u8f.setFont(MSG_FONT);
   u8f.setForegroundColor(C_TXT);
-  int asc = u8f.getFontAscent();
-  int total = lines.size() * lineH;
-  int y = TOPBAR + ((H - TOPBAR) - total) / 2 + asc;
-  for (auto& l : lines) {
-    u8f.setCursor((W - u8f.getUTF8Width(l.c_str())) / 2, y);
-    u8f.print(l);
-    y += lineH;
+  int asc = u8f.getFontAscent(), desc = -u8f.getFontDescent();
+  int baseOff = (CELL_H - (asc + desc)) / 2 + asc;  // texte centré verticalement dans la case
+  for (int r = 0; r < (int)lines.size(); r++) {
+    auto& l = lines[r];
+    int c0 = (COLS - (int)l.size()) / 2;
+    for (int c = 0; c < (int)l.size(); c++) {
+      int cw = u8f.getUTF8Width(l[c].c_str());
+      u8f.setCursor(GRID_X + (c0 + c) * CELL_W + (CELL_W - cw) / 2, GRID_Y + (r0 + r) * CELL_H + baseOff);
+      u8f.print(l[c]);
+    }
   }
 }
 

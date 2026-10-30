@@ -32,6 +32,7 @@ Commande en cours : 9–10 × LilyGO T-Watch S3 (+ routeur de voyage GL.iNet, c�
   - [ ] Couronne : appui court = écran d'info, appui long = menu du numéro.
   - [ ] Batterie : le pourcentage s'affiche dans l'admin.
   - [ ] Lisibilité à bout de bras, sous un éclairage fort. Luminosités : `BRIGHT_*` dans `config.h`.
+  - [ ] Grille de texte 12 × 8 (police `inb24`, cases de 19 × 27 px) : vérifier que les accents ne débordent pas. Sinon, essayer `u8g2_font_inb21_mf`.
 - [ ] Laptop **sur le routeur** : la montre passe au vert dans l'admin. Envoyer un message et vérifier vibration → affichage → ✓ reçu.
 - [ ] Tester la coupure : éteindre le routeur 30 s puis le rallumer → la montre doit se reconnecter seule.
 
