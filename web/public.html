@@ -113,6 +113,13 @@ function land(id, text, shake = true) {
   if (shake) { c.classList.remove('land'); void c.offsetWidth; c.classList.add('land') }
 }
 
+// Position finale d'un élément, sans tenir compte des transformations en cours
+// (la grille revient de son recul pendant le vol, la case peut trembler).
+function layoutRect(el) {
+  let x = 0, y = 0;
+  for (let e = el; e; e = e.offsetParent) { x += e.offsetLeft + (e === el ? 0 : e.clientLeft); y += e.offsetTop + (e === el ? 0 : e.clientTop) }
+  return { left: x, top: y, width: el.offsetWidth, height: el.offsetHeight };
+}
 async function play(b, startAt) {
   await wait(startAt - Date.now());
   const T = b.dur, t0 = Date.now();
@@ -152,15 +159,19 @@ async function play(b, startAt) {
   const kCell = cellMetrics();
   const flights = ids.map(id => {
     // cible = la grille de texte de la case : les lettres se posent exactement sur celles de la case
-    const target = cell(id).querySelector('.tgrid').getBoundingClientRect();
+    const target = layoutRect(cell(id).querySelector('.tgrid'));
     const f = document.createElement('div'); f.className = 'fly';
     f.style.left = from.left + 'px'; f.style.top = from.top + 'px'; f.style.width = from.width + 'px'; f.style.height = from.height + 'px';
-    const g = document.createElement('div'); g.className = 'tgrid'; applyMetrics(g, kBig); renderGrid(g, b.text); f.appendChild(g);
+    // grille volante = grille de la case agrandie à l'identique (mêmes proportions, pas d'arrondi)
+    const S = kBig.cw / kCell.cw;
+    const g = document.createElement('div'); g.className = 'tgrid';
+    applyMetrics(g, { cw: kCell.cw * S, ch: kCell.ch * S, fs: kCell.fs * S }); renderGrid(g, b.text); f.appendChild(g);
     document.body.appendChild(f);
+    const fg = g.getBoundingClientRect();  // position réelle du texte dans le carré volant
     // échelle grille→grille, origine en haut à gauche (transform-origin:0 0)
-    const s = target.width / fromGrid.width;
-    const dx = target.left - from.left - (fromGrid.left - from.left) * s;
-    const dy = target.top - from.top - (fromGrid.top - from.top) * s;
+    const s = target.width / fg.width;
+    const dx = target.left - from.left - (fg.left - from.left) * s;
+    const dy = target.top - from.top - (fg.top - from.top) * s;
     return f.animate([
       { transform: 'translate(0,0) scale(1)', borderColor: '#ffd23f' },
       { transform: `translate(${dx}px,${dy}px) scale(${s})`, borderColor: 'transparent', offset: 1 }
