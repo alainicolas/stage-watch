@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>StageWatch · Public</title>
+<style>
+:root{--bg:#000;--fg:#fff;--mut:#7a7f88;--acc:#ffd23f}
+*{box-sizing:border-box}html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);font-family:system-ui,-apple-system,Segoe UI,sans-serif;overflow:hidden;cursor:none}
+#grid{display:grid;height:100vh;padding:2vh 2vw;gap:1.5vh 1.5vw;grid-template-columns:repeat(var(--cols),1fr)}
+.c{border:2px solid #222;border-radius:1.5vh;padding:2vh 1.5vw;display:flex;flex-direction:column;min-height:0;transition:border-color .4s,background .4s}
+.c .n{font-size:2.6vh;color:var(--mut);font-weight:600;letter-spacing:.02em}
+.c .m{flex:1;display:flex;align-items:center;justify-content:center;text-align:center;font-weight:800;line-height:1.1;overflow:hidden;word-break:break-word}
+.c.fresh{border-color:var(--acc);background:#1a1500}.c.fresh .n{color:var(--acc)}
+.c.fresh .m{animation:pop .6s ease-out}
+@keyframes pop{0%{transform:scale(.6);opacity:0}60%{transform:scale(1.06);opacity:1}100%{transform:scale(1)}}
+#off{position:fixed;bottom:1vh;right:1vw;color:#f2555a;font-size:14px;display:none}
+</style></head><body>
+<div id="grid"></div><div id="off">connexion au serveur…</div>
+<script src="/common.js"></script>
+<script>
+// Chaque participant a sa case ; le dernier message reçu reste affiché, la case s'allume quand il arrive.
+const FRESH_MS = 8000; let watches = [], fresh = {};
+connectWS('public', m => {
+  if (m.type === 'state') { watches = m.watches; render() }
+  if (m.type === 'message') { fresh[m.message.to] = Date.now(); render() }
+  if (m.type === 'cleared') render();
+}, on => document.getElementById('off').style.display = on ? 'none' : 'block');
+function render() {
+  const n = watches.length || 1, cols = n <= 4 ? 2 : n <= 9 ? 3 : 4;
+  const g = document.getElementById('grid'); g.style.setProperty('--cols', cols);
+  g.innerHTML = watches.map(w => `<div class="c ${Date.now() - (fresh[w.id] || 0) < FRESH_MS ? 'fresh' : ''}" data-id="${w.id}">
+    <div class="n">${esc(w.name)}</div><div class="m">${w.last ? esc(w.last.text) : ''}</div></div>`).join('');
+  g.querySelectorAll('.m').forEach(fit);
+}
+function fit(el) { // plus grande police possible qui tient dans la case
+  if (!el.textContent) return; let lo = 10, hi = 400;
+  while (hi - lo > 1) { const mid = (lo + hi) >> 1; el.style.fontSize = mid + 'px'; (el.scrollHeight <= el.clientHeight && el.scrollWidth <= el.clientWidth) ? lo = mid : hi = mid }
+  el.style.fontSize = lo + 'px';
+}
+setInterval(() => document.querySelectorAll('.c.fresh').forEach(c => { if (Date.now() - (fresh[c.dataset.id] || 0) >= FRESH_MS) c.classList.remove('fresh') }), 500);
+addEventListener('resize', render);
+addEventListener('dblclick', () => document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen());
+</script></body></html>

@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>StageWatch · Simulateur</title>
+<style>
+:root{--bg:#1a1d22;--fg:#e8ecf1;--mut:#8b95a3;--acc:#ffd23f}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:14px system-ui,-apple-system,Segoe UI,sans-serif;padding:16px}
+.bar{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:16px}
+input,select,button{font:inherit;background:#2a313b;color:var(--fg);border:1px solid #3a424e;border-radius:6px;padding:6px 10px}
+.hint{color:var(--mut);font-size:12px}
+#watches{display:flex;flex-wrap:wrap;gap:28px}
+.watch{display:flex;flex-direction:column;align-items:center;gap:6px}
+.case{background:#2b2b2e;border-radius:22%;padding:calc(var(--px)*22px);box-shadow:0 6px 20px #0008}
+.case.buzz{animation:buzz .08s linear 5}
+@keyframes buzz{0%{transform:translate(0)}25%{transform:translate(-3px,1px)}50%{transform:translate(3px,-1px)}75%{transform:translate(-2px,-1px)}100%{transform:translate(0)}}
+/* écran : 240x240 px logiques, mis à l'échelle */
+.screen{width:240px;height:240px;background:#000;overflow:hidden;position:relative;transform:scale(var(--px));transform-origin:0 0}
+.screenWrap{width:calc(240px*var(--px));height:calc(240px*var(--px));overflow:hidden;border-radius:4px}
+.msg{position:absolute;inset:8px;display:flex;align-items:center;justify-content:center;text-align:center;color:#fff;font-weight:800;line-height:1.08;word-break:break-word;font-family:Arial,Helvetica,sans-serif}
+.status{position:absolute;top:2px;left:6px;right:6px;display:flex;justify-content:space-between;font:11px Arial;color:#666}
+.idle{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font:bold 64px Arial;color:#333}
+.lbl{font-size:12px;color:var(--mut)}
+</style></head><body>
+<div class="bar">
+  <b>Simulateur de montres T-Watch S3</b>
+  <label>Montres <select id="n"></select></label>
+  <label>Taille <select id="scale">
+    <option value="real">Taille réelle (1,54")</option><option value="1">240 px</option><option value="1.5" selected>Grand</option></select></label>
+  <label><input type="checkbox" id="snd" checked> bip à la réception</label>
+  <span class="hint">Chaque montre simulée se connecte comme une vraie. « Taille réelle » utilise les mm CSS : à vérifier avec une règle sur ton écran.</span>
+</div>
+<div id="watches"></div>
+<script src="/common.js"></script>
+<script>
+// Logique d'affichage identique à celle prévue dans le firmware : plus grande taille de police qui tient, écran éteint (ID en gris) au repos.
+const ac = new (window.AudioContext || window.webkitAudioContext)();
+function beep() { if (!document.getElementById('snd').checked) return; const o = ac.createOscillator(), g = ac.createGain(); o.frequency.value = 180; o.type = 'square'; g.gain.value = .05; o.connect(g); g.connect(ac.destination); o.start(); o.stop(ac.currentTime + .35) }
+const sims = [];
+function makeWatch(id) {
+  const el = document.createElement('div'); el.className = 'watch';
+  el.innerHTML = `<div class="case"><div class="screenWrap"><div class="screen"><div class="status"><span class="wifi">⦿ …</span><span class="bat"></span></div><div class="idle">${id}</div><div class="msg"></div></div></div></div><div class="lbl">Montre ${id}</div>`;
+  document.getElementById('watches').appendChild(el);
+  let battery = 60 + Math.floor(Math.random() * 40);
+  const msgEl = el.querySelector('.msg'), idle = el.querySelector('.idle'), wifi = el.querySelector('.wifi'), batEl = el.querySelector('.bat');
+  batEl.textContent = battery + '%';
+  const sock = connectWS('watch', m => {
+    if (m.type === 'msg') {
+      // vibration (simulée) puis affichage, puis accusé de réception
+      el.querySelector('.case').classList.remove('buzz'); void el.offsetWidth; el.querySelector('.case').classList.add('buzz'); beep();
+      setTimeout(() => { show(m.text); sock.send({ type: 'ack', msgId: m.msgId }) }, 400);
+    }
+    if (m.type === 'clear') show('');
+  }, on => { wifi.textContent = on ? '⦿ ok' : '⦿ …'; wifi.style.color = on ? '#3ecf8e' : '#f2555a' });
+  sock.onopen = () => sock.send({ type: 'hello', id, battery, sim: true });
+  const hb = setInterval(() => { if (Math.random() < .1) battery = Math.max(0, battery - 1); batEl.textContent = battery + '%'; sock.send({ type: 'hb', battery }) }, 10000);
+  function show(t) { msgEl.textContent = t; idle.style.display = t ? 'none' : 'flex'; fit(msgEl) }
+  return { el, close() { clearInterval(hb); sock.onclose = null } };
+}
+function fit(el) {
+  if (!el.textContent) return; let lo = 12, hi = 120;
+  while (hi - lo > 1) { const mid = (lo + hi) >> 1; el.style.fontSize = mid + 'px'; (el.scrollHeight <= el.clientHeight && el.scrollWidth <= el.clientWidth) ? lo = mid : hi = mid }
+  el.style.fontSize = lo + 'px';
+}
+function setScale() {
+  const v = document.getElementById('scale').value;
+  // 1,54" diagonale carrée -> côté ≈ 27,7 mm ; 1 mm CSS ≈ 3,78 px
+  const px = v === 'real' ? (27.7 * 3.7795) / 240 : +v;
+  document.documentElement.style.setProperty('--px', px);
+}
+const n = document.getElementById('n');
+for (let i = 1; i <= 9; i++) n.innerHTML += `<option ${i === 3 ? 'selected' : ''}>${i}</option>`;
+function rebuild() { location.hash = n.value; location.reload() }
+n.onchange = rebuild;
+if (location.hash) n.value = location.hash.slice(1);
+document.getElementById('scale').onchange = setScale; setScale();
+for (let i = 1; i <= +n.value; i++) sims.push(makeWatch(i));
+</script></body></html>

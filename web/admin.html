@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>StageWatch · Dirigeant</title>
+<style>
+:root{--bg:#111418;--panel:#1b2027;--line:#2c333d;--fg:#e8ecf1;--mut:#8b95a3;--acc:#ffd23f;--ok:#3ecf8e;--warn:#f5a524;--bad:#f2555a}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.4 system-ui,-apple-system,Segoe UI,sans-serif}
+header{display:flex;align-items:center;gap:16px;padding:12px 20px;border-bottom:1px solid var(--line)}
+header h1{font-size:18px;margin:0}header .sp{flex:1}header a{color:var(--mut);font-size:13px}
+.dot{width:10px;height:10px;border-radius:50%;display:inline-block;background:var(--bad)}.dot.on{background:var(--ok)}
+main{display:grid;grid-template-columns:1fr 340px;gap:20px;padding:20px;max-width:1300px;margin:auto}
+@media(max-width:900px){main{grid-template-columns:1fr}}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px}
+.w{background:var(--panel);border:2px solid var(--line);border-radius:12px;padding:10px 12px;cursor:pointer;user-select:none;position:relative}
+.w.sel{border-color:var(--acc);box-shadow:0 0 0 1px var(--acc)}
+.w.off{opacity:.55}
+.w .top{display:flex;align-items:center;gap:8px;font-weight:600}
+.w .num{background:#000;color:var(--acc);border-radius:6px;padding:0 7px;font-size:14px}
+.w .name{flex:1;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.w .meta{color:var(--mut);font-size:12px;margin-top:4px;display:flex;justify-content:space-between}
+.w .last{margin-top:6px;font-size:13px;min-height:18px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.st{font-size:12px;font-weight:600}.st.ok{color:var(--ok)}.st.wait{color:var(--warn)}.st.no{color:var(--bad)}
+.bat.low{color:var(--bad);font-weight:700}
+.bar{display:flex;gap:8px;margin:14px 0 8px;flex-wrap:wrap}
+button{background:#2a313b;color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:8px 12px;font:inherit;cursor:pointer}
+button:hover{background:#343c48}button.primary{background:var(--acc);color:#111;border:none;font-weight:700;font-size:17px;padding:12px 22px}
+button.primary:disabled{opacity:.4;cursor:default}
+.compose{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px}
+textarea{width:100%;background:#0b0d10;color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:12px;font:22px/1.3 system-ui,sans-serif;resize:none;height:96px}
+textarea:focus{outline:2px solid var(--acc)}
+.row{display:flex;align-items:center;gap:12px;margin-top:10px}.row .sp{flex:1}.cnt{color:var(--mut);font-size:13px}.cnt.over{color:var(--bad)}
+.to{color:var(--mut);font-size:14px;margin-bottom:8px}.to b{color:var(--fg)}
+aside{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px;max-height:calc(100vh - 100px);overflow:auto}
+aside h2{font-size:14px;margin:0 0 10px;color:var(--mut);text-transform:uppercase;letter-spacing:.05em}
+.h{border-bottom:1px solid var(--line);padding:8px 0;font-size:14px}.h .t{color:var(--mut);font-size:12px}
+.hint{color:var(--mut);font-size:12px;margin-top:8px}
+</style></head><body>
+<header><span class="dot" id="conn"></span><h1>StageWatch · Dirigeant</h1><span class="sp"></span>
+<span id="ips" class="hint"></span><a href="/public" target="_blank">Page public ↗</a><a href="/sim" target="_blank">Simulateur ↗</a></header>
+<main>
+<section>
+  <div class="grid" id="grid"></div>
+  <div class="bar">
+    <button id="all">Tout sélectionner</button><button id="none">Aucun</button>
+    <button id="clr" title="Efface l'écran des montres sélectionnées">Effacer l'écran</button>
+  </div>
+  <div class="compose">
+    <div class="to" id="to"></div>
+    <textarea id="txt" maxlength="120" placeholder="Message… (Entrée pour envoyer, Maj+Entrée = retour ligne)"></textarea>
+    <div class="row"><span class="cnt" id="cnt">0 / 100</span><span class="sp"></span>
+      <button class="primary" id="send" disabled>Envoyer</button></div>
+    <div class="hint">Clic = sélectionner · Double-clic sur un nom = renommer · Touches 1–9 (hors saisie) = sélection rapide</div>
+  </div>
+</section>
+<aside><h2>Historique</h2><div id="hist"></div></aside>
+</main>
+<script src="/common.js"></script>
+<script>
+let state = { watches: [], history: [] }; const sel = new Set();
+const $ = id => document.getElementById(id);
+const ws = connectWS('admin', m => { if (m.type === 'state') { state = m; render() } }, on => $('conn').classList.toggle('on', on));
+fetch('/api/info').then(r => r.json()).then(i => $('ips').textContent = 'IP : ' + i.ips.join(', ') + ' · port ' + i.port);
+
+function status(w) {
+  if (!w.online) return '<span class="st no">● hors ligne</span>';
+  if (w.last && !w.last.acked) return '<span class="st wait">● en attente…</span>';
+  return '<span class="st ok">● connectée</span>';
+}
+function render() {
+  $('grid').innerHTML = state.watches.map(w => `
+    <div class="w ${sel.has(w.id) ? 'sel' : ''} ${w.online ? '' : 'off'}" data-id="${w.id}">
+      <div class="top"><span class="num">${w.id}</span><span class="name" data-id="${w.id}">${esc(w.name)}</span></div>
+      <div class="meta">${status(w)}<span class="bat ${w.battery >= 0 && w.battery < 20 ? 'low' : ''}">${w.battery >= 0 ? '🔋 ' + w.battery + '%' : ''}${w.sim ? ' · sim' : ''}</span></div>
+      <div class="last">${w.last ? (w.last.acked ? '✓ ' : '… ') + esc(w.last.text) : '<span style="color:var(--mut)">—</span>'}</div>
+    </div>`).join('');
+  const byId = Object.fromEntries(state.watches.map(w => [w.id, w]));
+  $('hist').innerHTML = state.history.slice().reverse().map(h => `
+    <div class="h"><div class="t">${hhmm(h.time)} → ${esc(byId[h.to]?.name || h.to)} ${h.acked ? '✓' : '<span style="color:var(--warn)">…</span>'}</div>${esc(h.text)}</div>`).join('');
+  updateCompose();
+}
+function updateCompose() {
+  const names = state.watches.filter(w => sel.has(w.id)).map(w => w.name);
+  $('to').innerHTML = names.length === 0 ? 'Choisis un ou plusieurs destinataires ci-dessus'
+    : names.length === state.watches.length ? 'À : <b>Tout le monde</b>' : 'À : <b>' + names.map(esc).join(', ') + '</b>';
+  const n = [...$('txt').value].length;
+  $('cnt').textContent = n + ' / 100'; $('cnt').classList.toggle('over', n > 100);
+  $('send').disabled = !names.length || !$('txt').value.trim();
+}
+$('grid').addEventListener('click', e => { const c = e.target.closest('.w'); if (!c) return; const id = +c.dataset.id; sel.has(id) ? sel.delete(id) : sel.add(id); render() });
+$('grid').addEventListener('dblclick', e => {
+  const n = e.target.closest('.name'); if (!n) return; const id = +n.dataset.id;
+  const cur = state.watches.find(w => w.id === id)?.name || '';
+  const v = prompt('Nom du participant ' + id + ' :', cur); if (v !== null) ws.send({ type: 'rename', id, name: v.trim() });
+});
+$('all').onclick = () => { state.watches.forEach(w => sel.add(w.id)); render() };
+$('none').onclick = () => { sel.clear(); render() };
+$('clr').onclick = () => { if (sel.size) ws.send({ type: 'clear', targets: [...sel] }) };
+$('txt').oninput = updateCompose;
+function send() {
+  const text = $('txt').value.trim(); if (!text || !sel.size) return;
+  if (ws.send({ type: 'send', targets: [...sel], text })) { $('txt').value = ''; updateCompose() } else alert('Pas connecté au serveur');
+}
+$('send').onclick = send;
+$('txt').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } });
+document.addEventListener('keydown', e => {
+  if (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT') return;
+  const k = +e.key; if (k >= 1 && k <= 9 && state.watches.some(w => w.id === k)) { sel.has(k) ? sel.delete(k) : sel.add(k); render() }
+});
+</script></body></html>
