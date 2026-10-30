@@ -5,54 +5,171 @@
 :root{--bg:#000;--card:#0d0d0f;--line:#232327;--fg:#fff;--mut:#8a8f98;--acc:#ffd23f}
 *{box-sizing:border-box}html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);font-family:system-ui,-apple-system,Segoe UI,sans-serif;overflow:hidden;cursor:none}
 /* 8 cases strictement identiques : 4 x 2 qui remplissent l'écran, quel que soit le contenu */
-#grid{display:grid;height:100vh;padding:2.5vh 2vw;gap:2vh 1.5vw;grid-template-columns:repeat(4,minmax(0,1fr));grid-template-rows:repeat(2,minmax(0,1fr))}
+#grid{display:grid;height:100vh;padding:2.5vh 2vw;gap:2vh 1.5vw;grid-template-columns:repeat(4,minmax(0,1fr));grid-template-rows:repeat(2,minmax(0,1fr));transition:filter .6s,transform .6s,opacity .6s}
+#grid.dim{filter:blur(6px) brightness(.35);transform:scale(.96)}
 .c{background:var(--card);border:3px solid var(--line);border-radius:2vh;padding:2vh 1.2vw;display:flex;flex-direction:column;gap:1.5vh;min-height:0;min-width:0;overflow:hidden;transition:border-color .5s,background .5s,box-shadow .5s}
 .c .hd{display:flex;align-items:center;gap:1vw;min-width:0;flex:none}
-.c .ph{width:9vh;height:9vh;border-radius:50%;flex:none;background:#222 center/cover;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:3.6vh;color:#666}
+.ph{border-radius:50%;flex:none;background:#222 center/cover;display:flex;align-items:center;justify-content:center;font-weight:800;color:#777}
+.c .ph{width:9vh;height:9vh;font-size:3.6vh}
 .c .n{font-size:3.2vh;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#d6d9de}
 .c .m{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;overflow:hidden}
 .c.fresh{border-color:var(--acc);background:#1c1700;box-shadow:0 0 4vh #ffd23f40}
 .c.fresh .n{color:var(--acc)}
-.c.fresh .m{animation:pop .6s ease-out}
-@keyframes pop{0%{transform:scale(.6);opacity:0}60%{transform:scale(1.05);opacity:1}100%{transform:scale(1)}}
+.c.land{animation:shake .5s ease-out}
+@keyframes shake{0%,100%{transform:translate(0)}15%{transform:translate(-1.2vh,.3vh) rotate(-.6deg)}30%{transform:translate(1.2vh,-.3vh) rotate(.6deg)}45%{transform:translate(-.8vh,.2vh)}60%{transform:translate(.8vh,-.2vh)}80%{transform:translate(-.3vh,0)}}
+
+/* ===== Scène de révélation ===== */
+#stage{position:fixed;inset:0;pointer-events:none;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4vh;visibility:hidden}
+#stage.on{visibility:visible}
+#who{display:flex;gap:calc(var(--wph)*.25);justify-content:center;flex-wrap:nowrap;max-width:96vw}
+#who .p{display:flex;flex-direction:column;align-items:center;gap:1.2vh;opacity:0;transform:translateY(-4vh) scale(.5)}
+#who .p.in{animation:popin .55s cubic-bezier(.3,1.6,.5,1) forwards}
+@keyframes popin{to{opacity:1;transform:none}}
+#who .ph{width:var(--wph);height:var(--wph);font-size:calc(var(--wph)*.4);border:.5vh solid var(--acc);box-shadow:0 0 3vh #ffd23f55}
+#who .pn{font-size:calc(var(--wph)*.26);font-weight:800;color:var(--acc);white-space:nowrap;max-width:calc(var(--wph)*2.2);overflow:hidden;text-overflow:ellipsis}
+#big{background:#000;border:1.2vh solid #2b2b2e;border-radius:4vh;box-shadow:0 0 8vh #ffd23f30,0 0 0 .4vh var(--acc);display:flex;align-items:center;justify-content:center;opacity:0;transform:scale(.3)}
+#big.in{animation:bigin .6s cubic-bezier(.2,1.3,.4,1) forwards}
+@keyframes bigin{to{opacity:1;transform:none}}
+.fly{position:fixed;z-index:10;background:#000;border:.6vh solid var(--acc);border-radius:2vh;display:flex;align-items:center;justify-content:center;overflow:hidden;pointer-events:none;will-change:transform,opacity}
 #off{position:fixed;bottom:1vh;right:1vw;color:#f2555a;font-size:14px;display:none}
 </style></head><body>
-<div id="grid"></div><div id="off">connexion au serveur…</div>
+<div id="grid"></div>
+<div id="stage"><div id="who"></div><div id="big"><div class="tgrid" id="bigGrid"></div></div></div>
+<div id="off">connexion au serveur…</div>
 <script src="/common.js"></script>
 <script>
-// Une case fixe par participant ; le dernier message reste affiché, la case s'allume à l'arrivée.
-const FRESH_MS = 8000; let watches = [], fresh = {}, built = '';
+// Une case fixe par participant. À chaque envoi (si l'animation est active) :
+//   1. le message apparaît en GRAND au centre avec les photos des destinataires
+//   2. il rétrécit et vole vers la case de chaque destinataire
+//   3. la case s'allume et tremble à l'atterrissage, puis affiche le message.
+// Le serveur planifie la file (delay/dur) : la page suit ce planning, les envois rapprochés sont accélérés.
+const FRESH_MS = 8000;
+let watches = [], fresh = {}, built = '';
+const shown = {};     // id -> texte affiché dans la case (peut être en retard sur le serveur pendant l'animation)
+const holding = {};   // id -> nombre d'animations en attente/en cours vers cette case
+const $ = id => document.getElementById(id);
+const byId = id => watches.find(w => w.id === id);
+const initials = n => n.split(/\s+/).filter(Boolean).slice(0, 2).map(x => x[0].toUpperCase()).join('');
+
 connectWS('public', m => {
   if (m.type === 'state') { watches = m.watches; render() }
-  if (m.type === 'message') { fresh[m.message.to] = Date.now(); render(m.message.to) }
-}, on => document.getElementById('off').style.display = on ? 'none' : 'block');
-const initials = n => n.split(/\s+/).filter(Boolean).slice(0, 2).map(x => x[0].toUpperCase()).join('');
-function render(popId) {
-  const g = document.getElementById('grid');
+  if (m.type === 'send') enqueue(m.batch);
+}, on => $('off').style.display = on ? 'none' : 'block');
+
+// ---------- Grille de base ----------
+function render() {
+  const g = $('grid');
   const sig = watches.map(w => w.id).join(',');
-  if (sig !== built) { // structure créée une fois, puis mise à jour en place (pas de saut visuel)
+  if (sig !== built) {
     g.innerHTML = watches.map(w => `<div class="c" data-id="${w.id}"><div class="hd"><div class="ph"></div><div class="n"></div></div><div class="m"><div class="tgrid"></div></div></div>`).join('');
     built = sig;
   }
   for (const w of watches) {
-    const c = g.querySelector(`[data-id="${w.id}"]`), ph = c.querySelector('.ph'), m = c.querySelector('.m');
+    const c = cell(w.id), ph = c.querySelector('.ph');
     c.querySelector('.n').textContent = w.name;
-    ph.style.backgroundImage = w.photo ? `url('${w.photo}')` : ''; ph.textContent = w.photo ? '' : initials(w.name);
-    const txt = w.last ? w.last.text : '';
-    if (m.dataset.t !== txt) { m.dataset.t = txt; renderGrid(m.firstChild, txt) }
+    setPhoto(ph, w);
+    // pendant qu'une animation vole vers cette case, on garde l'ancien texte
+    if (!holding[w.id]) setCellText(w.id, w.last ? w.last.text : '');
     c.classList.toggle('fresh', Date.now() - (fresh[w.id] || 0) < FRESH_MS);
-    if (popId === w.id) { m.style.animation = 'none'; void m.offsetWidth; m.style.animation = '' }
   }
   sizeGrids();
 }
-// Même taille de caractère pour toutes les cases (proportions de l'écran de la montre : 19 x 27)
-function sizeGrids() {
-  const m = document.querySelector('.c .m'); if (!m) return;
-  const cw = Math.floor(Math.min(m.clientWidth / 12, (m.clientHeight / 8) * 19 / 27));
-  const g = document.getElementById('grid');
-  g.style.setProperty('--cw', cw + 'px'); g.style.setProperty('--ch', Math.floor(cw * 27 / 19) + 'px'); g.style.setProperty('--fs', Math.floor(cw * 1.55) + 'px');
+const cell = id => $('grid').querySelector(`[data-id="${id}"]`);
+function setPhoto(ph, w) { ph.style.backgroundImage = w.photo ? `url('${w.photo}')` : ''; ph.textContent = w.photo ? '' : initials(w.name) }
+function setCellText(id, txt) {
+  if (shown[id] === txt) return;
+  shown[id] = txt; renderGrid(cell(id).querySelector('.tgrid'), txt);
 }
+// Taille des caractères commune à toutes les cases (proportions de l'écran de la montre : 19 x 27)
+function cellMetrics() {
+  const m = document.querySelector('.c .m'); if (!m) return null;
+  const cw = Math.floor(Math.min(m.clientWidth / 12, (m.clientHeight / 8) * 19 / 27));
+  return { cw, ch: Math.floor(cw * 27 / 19), fs: Math.floor(cw * 1.55) };
+}
+function applyMetrics(el, k) {
+  el.style.setProperty('--cw', k.cw + 'px'); el.style.setProperty('--ch', k.ch + 'px'); el.style.setProperty('--fs', k.fs + 'px');
+}
+function sizeGrids() { const k = cellMetrics(); if (k) applyMetrics($('grid'), k) }
 setInterval(() => document.querySelectorAll('.c.fresh').forEach(c => { if (Date.now() - (fresh[c.dataset.id] || 0) >= FRESH_MS) c.classList.remove('fresh') }), 500);
 addEventListener('resize', sizeGrids);
 addEventListener('dblclick', () => document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen());
+
+// ---------- File d'animation (planning donné par le serveur) ----------
+const wait = ms => new Promise(r => setTimeout(r, Math.max(0, ms)));
+let chain = Promise.resolve();
+function enqueue(b) {
+  if (!b.dur) { // animation désactivée : mise à jour directe
+    for (const id of b.to) { fresh[id] = Date.now(); land(id, b.text, false) }
+    return;
+  }
+  for (const id of b.to) holding[id] = (holding[id] || 0) + 1;
+  const startAt = Date.now() + b.delay;
+  chain = chain.then(() => play(b, startAt)).catch(() => {});
+}
+function land(id, text, shake = true) {
+  setCellText(id, text);
+  const c = cell(id); if (!c) return;
+  fresh[id] = Date.now(); c.classList.add('fresh');
+  if (shake) { c.classList.remove('land'); void c.offsetWidth; c.classList.add('land') }
+}
+
+async function play(b, startAt) {
+  await wait(startAt - Date.now());
+  const T = b.dur, t0 = Date.now();
+  // Découpage du temps : révélation ~70 %, vol ~20 %, atterrissage ~10 %
+  const tFly = T * 0.70, tFlyDur = T * 0.20;
+  const ids = b.to.filter(id => cell(id));
+  const stage = $('stage'), who = $('who'), big = $('big');
+
+  // --- 1. Arrivée + révélation (en même temps) ---
+  const n = ids.length;
+  // taille des photos (vh) selon le nombre de destinataires, bornée par la largeur de l'écran
+  const wphMax = n === 1 ? 20 : n <= 3 ? 16 : n <= 5 ? 12 : 9.5;
+  const wphFit = (innerWidth * 0.94 / n) / 2.25 / innerHeight * 100; // chaque photo + nom occupe ~2,25 x sa taille
+  const wph = Math.min(wphMax, wphFit);
+  who.style.setProperty('--wph', wph + 'vh');
+  who.innerHTML = ids.map(id => { const w = byId(id) || { name: '?' }; return `<div class="p" data-id="${id}"><div class="ph"></div><div class="pn">${esc(w.name)}</div></div>` }).join('');
+  who.querySelectorAll('.p').forEach(p => setPhoto(p.querySelector('.ph'), byId(+p.dataset.id) || { name: '?' }));
+  // grand écran : la plus grande taille qui tient sous les photos
+  const availH = innerHeight * 0.92 - (wph * 1.45 / 100) * innerHeight - innerHeight * 0.04;
+  const side = Math.min(availH, innerWidth * 0.7);
+  const cw = Math.floor((side * 0.9) / 12);
+  const kBig = { cw, ch: Math.floor(cw * 27 / 19), fs: Math.floor(cw * 1.55) };
+  big.style.width = big.style.height = Math.round(side) + 'px';
+  applyMetrics($('bigGrid'), kBig);
+  renderGrid($('bigGrid'), b.text);
+  $('grid').classList.add('dim');
+  stage.classList.add('on');
+  big.classList.remove('in'); big.style.opacity = ''; big.style.transform = ''; void big.offsetWidth; big.classList.add('in');
+  const step = Math.min(220, (T * 0.15) / Math.max(1, n));
+  who.querySelectorAll('.p').forEach((p, i) => setTimeout(() => p.classList.add('in'), 150 + i * step));
+
+  // --- 2. Vol : une copie du grand écran part vers chaque case ---
+  await wait(t0 + tFly - Date.now());
+  const from = big.getBoundingClientRect();
+  $('grid').classList.remove('dim');
+  stage.classList.remove('on');
+  const kCell = cellMetrics();
+  const flights = ids.map(id => {
+    const target = cell(id).querySelector('.m').getBoundingClientRect();
+    const f = document.createElement('div'); f.className = 'fly';
+    f.style.left = from.left + 'px'; f.style.top = from.top + 'px'; f.style.width = from.width + 'px'; f.style.height = from.height + 'px';
+    const g = document.createElement('div'); g.className = 'tgrid'; applyMetrics(g, kBig); renderGrid(g, b.text); f.appendChild(g);
+    document.body.appendChild(f);
+    // carré cible centré sur la zone message de la case
+    const ts = Math.min(target.width, target.height);
+    const tx = target.left + (target.width - ts) / 2, ty = target.top + (target.height - ts) / 2;
+    const s = ts / from.width;
+    return f.animate([
+      { transform: 'translate(0,0) scale(1)', opacity: 1 },
+      { transform: `translate(${tx - from.left}px,${ty - from.top}px) scale(${s})`, opacity: .9 }
+    ], { duration: tFlyDur, easing: 'cubic-bezier(.55,0,.35,1)', fill: 'forwards' }).finished.then(() => {
+      f.remove();
+      holding[id] = Math.max(0, (holding[id] || 1) - 1);
+      land(id, b.text);
+    });
+  });
+  await Promise.all(flights);
+  await wait(t0 + T - Date.now());
+}
 </script></body></html>

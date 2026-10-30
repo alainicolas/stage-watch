@@ -39,6 +39,9 @@ button.primary:disabled{opacity:.4;cursor:default}button.danger{color:var(--bad)
 textarea{width:100%;background:#0b0d10;color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:12px;font:22px/1.3 system-ui,sans-serif;resize:none;height:90px}
 textarea:focus,input:focus{outline:2px solid var(--acc)}
 .row{display:flex;align-items:center;gap:12px;margin-top:10px}.row .sp{flex:1}.cnt{color:var(--mut);font-size:13px}.cnt.over{color:var(--bad)}
+.opt{display:flex;align-items:center;gap:6px;font-size:14px;cursor:pointer;user-select:none}
+.opt input{accent-color:var(--acc);width:16px;height:16px}
+.opt.dis{opacity:.4;cursor:default}
 .to{color:var(--mut);font-size:14px;margin-bottom:8px}.to b{color:var(--fg)}
 aside{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px;max-height:calc(100vh - 100px);overflow:auto;position:sticky;top:20px}
 aside h2{font-size:13px;margin:0 0 10px;color:var(--mut);text-transform:uppercase;letter-spacing:.05em}
@@ -65,6 +68,8 @@ dialog .end{display:flex;justify-content:flex-end;gap:8px;margin-top:16px}
     <div class="to" id="to"></div>
     <textarea id="txt" placeholder="Message… (Entrée pour envoyer, Maj+Entrée = retour ligne)"></textarea>
     <div class="row"><span class="cnt" id="cnt">0 / 96</span><span class="sp"></span>
+      <label class="opt" title="Le message apparaît en grand sur l'écran public, puis vole vers les cases des destinataires"><input type="checkbox" id="optAnim"> Animation public</label>
+      <label class="opt" id="optRevealL" title="La montre reçoit le message seulement quand il atterrit sur l'écran public (~6 s après l'envoi)"><input type="checkbox" id="optReveal"> Révélation public <span class="hint" style="margin:0">(montre retardée)</span></label>
       <button class="primary" id="send" disabled>Envoyer</button></div>
     <div class="hint">Clic = sélectionner · ✎ = nom et photo · Touches 1–8 (hors saisie) = sélection rapide · Échap = tout désélectionner</div>
   </div>
@@ -89,13 +94,14 @@ dialog .end{display:flex;justify-content:flex-end;gap:8px;margin-top:16px}
 <script>
 let state = { watches: [], history: [] }; const sel = new Set();
 const $ = id => document.getElementById(id);
-const ws = connectWS('admin', m => { if (m.type === 'state') { state = m; render() } }, on => $('conn').classList.toggle('on', on));
+const ws = connectWS('admin', m => { if (m.type === 'state') { state = m; render(); syncOpts() } }, on => $('conn').classList.toggle('on', on));
 fetch('/api/info').then(r => r.json()).then(i => $('ips').textContent = 'IP : ' + i.ips.join(', ') + ' · port ' + i.port);
 
 const initials = n => n.split(/\s+/).filter(Boolean).slice(0, 2).map(x => x[0].toUpperCase()).join('');
 const phStyle = w => w.photo ? `style="background-image:url('${w.photo}')"` : '';
 function status(w) {
   if (!w.online) return '<span class="st no">● hors ligne</span>';
+  if (w.last && w.last.pending) return '<span class="st wait">● révélation…</span>';
   if (w.last && !w.last.acked) return '<span class="st wait">● en attente</span>';
   return '<span class="st ok">● connectée</span>';
 }
@@ -109,7 +115,7 @@ function render() {
           <div class="meta">${status(w)}<span class="bat ${w.battery >= 0 && w.battery < 20 ? 'low' : ''}">${w.battery >= 0 ? '🔋' + w.battery + '%' : ''}</span>${w.sim ? '<span>sim</span>' : ''}</div></div>
       </div>
       <div class="last ${w.last ? '' : 'empty'}">${w.last ? `<div class="tgrid" data-txt="${esc(w.last.text)}"></div>` : w.id}</div>
-      <div class="lt">${w.last ? `<span>${hhmm(w.last.time)}</span><span>${w.last.acked ? '<span class="st ok">✓ reçu</span>' : '<span class="st wait">… envoi</span>'}</span>` : '&nbsp;'}</div>
+      <div class="lt">${w.last ? `<span>${hhmm(w.last.time)}</span><span>${w.last.acked ? '<span class="st ok">✓ reçu</span>' : w.last.pending ? '<span class="st wait">⏳ révélation</span>' : '<span class="st wait">… envoi</span>'}</span>` : '&nbsp;'}</div>
     </div>`).join('');
   $('grid').querySelectorAll('.tgrid[data-txt]').forEach(g => renderGrid(g, g.dataset.txt));
   const byId = Object.fromEntries(state.watches.map(w => [w.id, w]));
@@ -134,6 +140,13 @@ $('all').onclick = () => { state.watches.forEach(w => sel.add(w.id)); render() }
 $('none').onclick = () => { sel.clear(); render() };
 $('clr').onclick = () => { if (sel.size) ws.send({ type: 'clear', targets: [...sel] }) };
 $('txt').oninput = updateCompose;
+function syncOpts() {
+  const st = state.settings || { animate: true, reveal: false };
+  $('optAnim').checked = st.animate; $('optReveal').checked = st.reveal; $('optReveal').disabled = !st.animate;
+  $('optRevealL').classList.toggle('dis', !st.animate);
+}
+function pushOpts() { ws.send({ type: 'settings', animate: $('optAnim').checked, reveal: $('optAnim').checked && $('optReveal').checked }) }
+$('optAnim').onchange = pushOpts; $('optReveal').onchange = pushOpts;
 function send() {
   const text = $('txt').value.trim(); if (!text || !sel.size || $('send').disabled) return;
   if (ws.send({ type: 'send', targets: [...sel], text })) { $('txt').value = ''; updateCompose() } else alert('Pas connecté au serveur');

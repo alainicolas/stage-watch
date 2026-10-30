@@ -45,6 +45,7 @@ Commande en cours : 9–10 × LilyGO T-Watch S3 (+ routeur de voyage GL.iNet, c�
 - [ ] Les 8 montres en même temps pendant 2–3 h, avec des messages réguliers.
 - [ ] Mesurer l'**autonomie** et noter le % de batterie dans l'admin toutes les 30 min.
       Si c'est trop juste : activer `WiFi.setSleep(true)` (un peu plus de latence) et baisser `BRIGHT_*`.
+- [ ] Tester l'**animation public** sur le vrai écran ou projecteur de la salle (lisibilité de loin, durée de 6 s), avec et sans « Révélation public ».
 - [ ] Tester la **portée** dans une vraie salle (routeur caché en coulisse ?).
 - [ ] Tester le **Windows** (`dist/StageWatch.exe`), s'il est utilisé un jour : autoriser le pare-feu au premier lancement.
 

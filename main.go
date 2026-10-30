@@ -44,6 +44,8 @@ type Message struct {
 	Time  int64  `json:"time"` // ms epoch
 	Acked bool   `json:"acked"`
 	AckAt int64  `json:"ackAt,omitempty"`
+	// Pending : retenu côté serveur jusqu'à la fin de l'animation public (mode révélation)
+	Pending bool `json:"pending,omitempty"`
 }
 
 type Watch struct {
@@ -61,6 +63,10 @@ type Watch struct {
 type Config struct {
 	Names  map[string]string `json:"names"`
 	Photos map[string]int64  `json:"photos"` // id -> version (anti-cache)
+	// Animation de la page public à chaque envoi
+	Animate *bool `json:"animate"`
+	// Révélation : la montre reçoit le message seulement quand il « atterrit » sur la page public
+	Reveal bool `json:"reveal"`
 }
 
 type client struct {
@@ -76,10 +82,12 @@ type Hub struct {
 	viewers map[*client]bool // admin + public
 	history []Message
 	nextID  int64
-	cfg     Config
-	cfgPath string
-	dataDir string
-	logFile *os.File
+	// fin prévue de la dernière animation public planifiée (ms epoch)
+	animBusyUntil int64
+	cfg           Config
+	cfgPath       string
+	dataDir       string
+	logFile       *os.File
 }
 
 func newHub(dataDir string) *Hub {
@@ -226,35 +234,112 @@ func (h *Hub) stateLocked() map[string]any {
 	if len(hist) > 50 {
 		hist = hist[len(hist)-50:]
 	}
-	return map[string]any{"type": "state", "watches": list, "history": hist}
+	return map[string]any{"type": "state", "watches": list, "history": hist,
+		"settings": map[string]bool{"animate": h.animate(), "reveal": h.cfg.Reveal}}
 }
 
 func (h *Hub) pushState() { h.broadcastViewers(h.stateLocked()) }
 
 // ---------- Logique ----------
 
+// Durées de l'animation public (ms). Le serveur est l'horloge de référence :
+// il planifie chaque envoi dans une file, et la page public suit ce planning.
+const (
+	animNormal = 6000 // durée normale (révélation + vol + atterrissage)
+	animFast   = 3000 // durée accélérée quand des envois attendent dans la file
+	animGap    = 300  // petite pause entre deux animations
+)
+
+func (h *Hub) animate() bool { return h.cfg.Animate == nil || *h.cfg.Animate }
+
 func (h *Hub) sendText(targets []int, text string) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	now := time.Now().UnixMilli()
+	nowT := time.Now()
+	now := nowT.UnixMilli()
+
+	// Planification dans la file d'animation
+	delay, dur := int64(0), int64(0)
+	if h.animate() {
+		start := now
+		if h.animBusyUntil > now {
+			start = h.animBusyUntil
+		}
+		delay = start - now
+		dur = animNormal
+		if delay > 0 {
+			dur = animFast // déjà du retard : on accélère
+		}
+		h.animBusyUntil = start + dur + animGap
+	}
+	reveal := h.animate() && h.cfg.Reveal
+	landing := time.Duration(delay+dur) * time.Millisecond
+
+	h.nextID++
+	batchID := h.nextID
+	ids := []int{}
 	for _, id := range targets {
 		w, ok := h.watches[id]
 		if !ok {
 			continue
 		}
+		ids = append(ids, id)
 		h.nextID++
-		m := Message{MsgID: h.nextID, To: id, Text: text, Time: now}
-		w.Last = &m
-		h.history = append(h.history, m)
-		if w.conn != nil {
-			w.conn.push(enc(map[string]any{"type": "msg", "msgId": m.MsgID, "text": text}))
+		m := &Message{MsgID: h.nextID, To: id, Text: text, Time: now, Pending: reveal}
+		w.Last = m
+		h.history = append(h.history, *m)
+		if reveal {
+			h.logf("ENVOI   -> %d (%s) : %q  [révélation : montre dans %.1f s]", id, w.Name, text, landing.Seconds())
+			wid, mid := id, m.MsgID
+			time.AfterFunc(landing, func() { h.deliverHeld(wid, mid) })
+		} else {
+			h.deliver(w)
+			h.logf("ENVOI   -> %d (%s) : %q%s", id, w.Name, text, map[bool]string{true: "", false: "  [montre hors ligne, sera livré à la reconnexion]"}[w.conn != nil])
 		}
-		h.logf("ENVOI   -> %d (%s) : %q%s", id, w.Name, text, map[bool]string{true: "", false: "  [montre hors ligne, sera livré à la reconnexion]"}[w.conn != nil])
-		h.broadcastViewers(map[string]any{"type": "message", "message": m, "name": w.Name})
 	}
+	if len(ids) == 0 {
+		return
+	}
+	h.broadcastViewers(map[string]any{"type": "send", "batch": map[string]any{
+		"id": batchID, "to": ids, "text": text, "delay": delay, "dur": dur, "reveal": reveal}})
 	if len(h.history) > 500 {
 		h.history = h.history[len(h.history)-500:]
 	}
+	h.pushState()
+}
+
+// à appeler avec h.mu verrouillé
+func (h *Hub) deliver(w *Watch) {
+	if w.conn != nil && w.Last != nil {
+		w.conn.push(enc(map[string]any{"type": "msg", "msgId": w.Last.MsgID, "text": w.Last.Text}))
+	}
+}
+
+// Fin de l'animation en mode révélation : on libère le message vers la montre.
+// Chaque message retenu est livré, même si un autre a été envoyé entre-temps (la montre les reçoit dans l'ordre).
+// « Effacer l'écran » annule les messages encore retenus.
+func (h *Hub) deliverHeld(id int, msgID int64) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	w := h.watches[id]
+	var m *Message
+	for i := len(h.history) - 1; i >= 0; i-- {
+		if h.history[i].MsgID == msgID {
+			m = &h.history[i]
+			break
+		}
+	}
+	if m == nil || !m.Pending {
+		return
+	}
+	m.Pending = false
+	if w.Last != nil && w.Last.MsgID == msgID {
+		w.Last.Pending = false
+	}
+	if w.conn != nil {
+		w.conn.push(enc(map[string]any{"type": "msg", "msgId": m.MsgID, "text": m.Text}))
+	}
+	h.logf("RÉVÉLÉ  -> %d (%s)%s", id, w.Name, map[bool]string{true: "", false: "  [montre hors ligne, sera livré à la reconnexion]"}[w.conn != nil])
 	h.pushState()
 }
 
@@ -262,6 +347,11 @@ func (h *Hub) clearWatches(targets []int) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	for _, id := range targets {
+		for i := range h.history {
+			if h.history[i].To == id && h.history[i].Pending {
+				h.history[i].Pending = false // révélation annulée
+			}
+		}
 		if w, ok := h.watches[id]; ok {
 			w.Last = nil
 			if w.conn != nil {
@@ -290,7 +380,7 @@ func (h *Hub) watchHello(c *client, id, battery int, sim bool) {
 	w.LastSeen = time.Now().UnixMilli()
 	h.logf("CONNEXION montre %d (%s)%s", id, w.Name, map[bool]string{true: " [simulateur]", false: ""}[sim])
 	// Re-livre le dernier message s'il n'a pas été confirmé
-	if w.Last != nil && !w.Last.Acked {
+	if w.Last != nil && !w.Last.Acked && !w.Last.Pending {
 		c.push(enc(map[string]any{"type": "msg", "msgId": w.Last.MsgID, "text": w.Last.Text}))
 	}
 	h.pushState()
@@ -357,6 +447,8 @@ type inMsg struct {
 	Targets json.RawMessage `json:"targets"`
 	Text    string          `json:"text"`
 	Name    string          `json:"name"`
+	Animate bool            `json:"animate"`
+	Reveal  bool            `json:"reveal"`
 }
 
 func (h *Hub) resolveTargets(raw json.RawMessage) []int {
@@ -474,6 +566,15 @@ func (h *Hub) handle(c *client, m inMsg) {
 			h.sendText(h.resolveTargets(m.Targets), string(text))
 		case "clear":
 			h.clearWatches(h.resolveTargets(m.Targets))
+		case "settings":
+			h.mu.Lock()
+			a := m.Animate
+			h.cfg.Animate = &a
+			h.cfg.Reveal = m.Reveal
+			h.saveCfg()
+			h.logf("RÉGLAGES animation=%v révélation=%v", a, m.Reveal)
+			h.pushState()
+			h.mu.Unlock()
 		case "rename":
 			h.mu.Lock()
 			if w, ok := h.watches[m.ID]; ok {
