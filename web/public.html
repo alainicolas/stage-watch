@@ -30,7 +30,7 @@
 #big{background:#000;border:1.2vh solid #2b2b2e;border-radius:4vh;box-shadow:0 0 8vh #ffd23f30,0 0 0 .4vh var(--acc);display:flex;align-items:center;justify-content:center;opacity:0;transform:scale(.3)}
 #big.in{animation:bigin .6s cubic-bezier(.2,1.3,.4,1) forwards}
 @keyframes bigin{to{opacity:1;transform:none}}
-.fly{position:fixed;z-index:10;background:#000;border:.6vh solid var(--acc);border-radius:2vh;display:flex;align-items:center;justify-content:center;overflow:hidden;pointer-events:none;will-change:transform,opacity}
+.fly{position:fixed;z-index:10;transform-origin:0 0;background:#000;border:.6vh solid var(--acc);border-radius:2vh;display:flex;align-items:center;justify-content:center;overflow:hidden;pointer-events:none;will-change:transform,opacity}
 #off{position:fixed;bottom:1vh;right:1vw;color:#f2555a;font-size:14px;display:none}
 </style></head><body>
 <div id="grid"></div>
@@ -146,23 +146,24 @@ async function play(b, startAt) {
 
   // --- 2. Vol : une copie du grand écran part vers chaque case ---
   await wait(t0 + tFly - Date.now());
-  const from = big.getBoundingClientRect();
+  const from = big.getBoundingClientRect(), fromGrid = $('bigGrid').getBoundingClientRect();
   $('grid').classList.remove('dim');
   stage.classList.remove('on');
   const kCell = cellMetrics();
   const flights = ids.map(id => {
-    const target = cell(id).querySelector('.m').getBoundingClientRect();
+    // cible = la grille de texte de la case : les lettres se posent exactement sur celles de la case
+    const target = cell(id).querySelector('.tgrid').getBoundingClientRect();
     const f = document.createElement('div'); f.className = 'fly';
     f.style.left = from.left + 'px'; f.style.top = from.top + 'px'; f.style.width = from.width + 'px'; f.style.height = from.height + 'px';
     const g = document.createElement('div'); g.className = 'tgrid'; applyMetrics(g, kBig); renderGrid(g, b.text); f.appendChild(g);
     document.body.appendChild(f);
-    // carré cible centré sur la zone message de la case
-    const ts = Math.min(target.width, target.height);
-    const tx = target.left + (target.width - ts) / 2, ty = target.top + (target.height - ts) / 2;
-    const s = ts / from.width;
+    // échelle grille→grille, origine en haut à gauche (transform-origin:0 0)
+    const s = target.width / fromGrid.width;
+    const dx = target.left - from.left - (fromGrid.left - from.left) * s;
+    const dy = target.top - from.top - (fromGrid.top - from.top) * s;
     return f.animate([
-      { transform: 'translate(0,0) scale(1)', opacity: 1 },
-      { transform: `translate(${tx - from.left}px,${ty - from.top}px) scale(${s})`, opacity: .9 }
+      { transform: 'translate(0,0) scale(1)', borderColor: '#ffd23f' },
+      { transform: `translate(${dx}px,${dy}px) scale(${s})`, borderColor: 'transparent', offset: 1 }
     ], { duration: tFlyDur, easing: 'cubic-bezier(.55,0,.35,1)', fill: 'forwards' }).finished.then(() => {
       f.remove();
       holding[id] = Math.max(0, (holding[id] || 1) - 1);
