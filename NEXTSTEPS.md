@@ -17,6 +17,9 @@ Commande en cours : 9–10 × LilyGO T-Watch S3 (+ routeur de voyage GL.iNet, c�
 - [ ] Pas besoin d'Internet, ni d'IP fixe : les montres trouvent le laptop toutes seules (annonce UDP sur le port 47808).
 - [ ] Mettre le SSID et le mot de passe dans `firmware/src/config.h`.
 - Si l'isolation des clients (« AP isolation ») est active, la désactiver : sinon les montres ne voient pas le laptop.
+- **Sans routeur** : ça marche aussi sur n'importe quel Wi-Fi 2,4 GHz (chez soi, la salle, ou le partage de connexion d'un téléphone ; sur iPhone, activer « Optimiser la compatibilité »), tant que le laptop et les montres sont sur le **même réseau**.
+  Ça peut bloquer sur : les Wi-Fi invités ou d'hôtel (isolation des clients), une page de connexion, un Wi-Fi d'entreprise (identifiant personnel), un réseau qui bloque l'annonce UDP (dans ce cas, mettre l'IP du laptop dans `SERVER_FALLBACK_HOST`), ou un réseau saturé.
+  ⚠️ Aujourd'hui, le Wi-Fi est inscrit dans le firmware : changer de réseau = reflasher les montres. Voir l'idée « plusieurs Wi-Fi » en section 5.
 
 ## 2. Première montre (une soirée)
 - [ ] Brancher la montre, puis `cd firmware && ~/.pio-venv/bin/pio run -e twatch -t upload`.
@@ -45,6 +48,8 @@ Commande en cours : 9–10 × LilyGO T-Watch S3 (+ routeur de voyage GL.iNet, c�
 - [ ] Tester le **Windows** (`dist/StageWatch.exe`), s'il est utilisé un jour : autoriser le pare-feu au premier lancement.
 
 ## 5. Idées pour plus tard (non commencées)
+- **Plusieurs Wi-Fi connus** dans le firmware (routeur, chez soi, salle habituelle…) : la montre rejoint le premier disponible. Rapide à faire.
+  Version plus souple : configurer le Wi-Fi depuis la montre, sans reflasher.
 - Messages préenregistrés / boutons rapides dans l'admin.
 - Messages programmés (envoi à un moment précis).
 - Thème et habillage de la page public (logo, couleurs du spectacle).
