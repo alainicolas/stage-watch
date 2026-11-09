@@ -96,7 +96,7 @@ body.setup .cfg{display:block}body.setup .compose{display:none}
       <label class="opt" title="Le message apparaît en grand sur l'écran public, puis vole vers les cases des destinataires"><input type="checkbox" id="optAnim"> Animation public</label>
       <label class="opt" id="optRevealL" title="La montre reçoit le message seulement quand il atterrit sur l'écran public (~6 s après l'envoi)"><input type="checkbox" id="optReveal"> Révélation public <span class="hint" style="margin:0">(montre retardée)</span></label>
       <button class="primary" id="send" disabled>Envoyer</button></div>
-    <div class="hint">Clic = sélectionner · ✎ = nom et photo · Touches 1–8 (hors saisie) = sélection rapide · Échap = tout désélectionner</div>
+    <div class="hint">Clic = sélectionner · ✎ = nom et photo · Touches 1–8 (hors saisie) = sélection rapide · après un clic sur une montre, tape directement le message · Échap = tout désélectionner</div>
   </div>
 </section>
 <aside><h2>Historique</h2><div id="hist"></div></aside>
@@ -162,6 +162,7 @@ function updateCompose() {
 $('grid').addEventListener('click', e => {
   const ed = e.target.closest('[data-edit]'); if (ed) { openEdit(+ed.dataset.edit); return }
   const c = e.target.closest('.w'); if (!c) return; const id = +c.dataset.id; sel.has(id) ? sel.delete(id) : sel.add(id); render();
+  if (!document.body.classList.contains('setup')) $('txt').focus({ preventScroll: true });  // on peut taper le message tout de suite
 });
 $('all').onclick = () => { state.watches.forEach(w => sel.add(w.id)); render() };
 $('none').onclick = () => { sel.clear(); render() };
@@ -188,7 +189,9 @@ $('txt').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey
 document.addEventListener('keydown', e => {
   if ($('dlg').open || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT') return;
   if (e.key === 'Escape') { sel.clear(); render(); return }
-  const k = +e.key; if (k >= 1 && k <= 8) { sel.has(k) ? sel.delete(k) : sel.add(k); render() }
+  const k = +e.key; if (k >= 1 && k <= 8) { sel.has(k) ? sel.delete(k) : sel.add(k); render(); return }
+  // Une lettre tapée hors du champ part directement dans le message
+  if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey && !document.body.classList.contains('setup')) $('txt').focus();
 });
 
 // ---- Réglages des montres ----
