@@ -178,7 +178,7 @@ function send() {
   const text = $('txt').value.trim(); if (!text || $('send').disabled) return;
   if (!sel.size) {  // message tapé avant de choisir : on montre où cliquer, le texte est gardé
     $('to').innerHTML = '<b style="color:var(--warn)">Choisis d\'abord le ou les destinataires ci-dessus, puis Envoyer</b>';
-    $('grid').classList.remove('nudge'); void $('grid').offsetWidth; $('grid').classList.add('nudge');
+    $('grid').classList.remove('nudge'); void $('grid').offsetWidth; $('grid').classList.add('nudge'); setTimeout(() => $('grid').classList.remove('nudge'), 800);
     return;
   }
   if (ws.send({ type: 'send', targets: [...sel], text })) { $('txt').value = ''; updateCompose() } else alert('Pas connecté au serveur');
