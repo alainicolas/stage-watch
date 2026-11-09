@@ -22,6 +22,7 @@
 #include <ArduinoJson.h>
 #include "config.h"
 #include "battery_cal.h"
+#include "logo.h"
 
 #ifdef SW_DEBUG
 #define LOG(...) Serial.printf(__VA_ARGS__)
@@ -269,6 +270,10 @@ void drawInfo() {
   if (!batCalOk) bat += " !";
   row("Batterie", bat, C_TXT);
   row("Version", FW_VERSION, C_MUT);
+  // Logo centré sous la version (y = 180 .. 236)
+  frame.setSwapBytes(true);   // LOGO est en RGB565 standard
+  frame.pushImage((W - LOGO_W) / 2, H - LOGO_H - 4, LOGO_W, LOGO_H, LOGO);
+  frame.setSwapBytes(false);
 }
 
 void drawMenu() {
