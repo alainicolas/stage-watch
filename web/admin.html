@@ -75,7 +75,7 @@ body.setup .cfg{display:block}body.setup .compose{display:none}
   <div class="cfg">
     <h3>Réglages des montres</h3>
     <div class="hint" style="margin:0">S'applique aux montres <b>sélectionnées et connectées</b>. Pas de câble : tout passe par le Wi-Fi et reste en mémoire dans la montre.</div>
-    <section><b>Wi-Fi</b> <span class="hint">3 réseaux mémorisés ; la montre prend celui qui est disponible. Le réseau utilisé en ce moment ne peut pas être modifié (sécurité).</span>
+    <section><b>Wi-Fi</b> <span class="hint">3 réseaux mémorisés ; la montre prend celui qui est disponible. Le réseau utilisé en ce moment ne peut pas être modifié (sécurité). Envoyer remplace le nom <b>et</b> le mot de passe du réseau choisi.</span>
       <div class="row"><select id="wSlot"><option value="0">Réseau 1</option><option value="1">Réseau 2</option><option value="2">Réseau 3</option></select>
         <input type="text" id="wSsid" placeholder="Nom du réseau" maxlength="32">
         <input type="password" id="wPass" placeholder="Mot de passe" maxlength="63">
@@ -185,15 +185,16 @@ document.addEventListener('keydown', e => {
 
 // ---- Réglages des montres ----
 $('setupBtn').onclick = () => { $('setupBtn').classList.toggle('on', document.body.classList.toggle('setup')); loadFw() };
+const cmd = m => ws.send(m) || (alert('Pas connecté au serveur : rien n\'a été envoyé'), false);
 const targets = () => { if (!sel.size) { alert('Sélectionne d\'abord une ou plusieurs montres'); return null } return [...sel] };
 $('wSend').onclick = () => {
   const t = targets(); if (!t) return; const ssid = $('wSsid').value.trim();
   if (!ssid) { alert('Nom du réseau vide'); return }
-  ws.send({ type: 'wifi', targets: t, slot: +$('wSlot').value, ssid, pass: $('wPass').value }); $('wPass').value = '';
+  if (cmd({ type: 'wifi', targets: t, slot: +$('wSlot').value, ssid, pass: $('wPass').value })) $('wPass').value = '';
 };
-$('wDel').onclick = () => { const t = targets(); if (t && confirm('Effacer le réseau ' + (+$('wSlot').value + 1) + ' sur les montres sélectionnées ?')) ws.send({ type: 'wifi', targets: t, slot: +$('wSlot').value, ssid: '', pass: '' }) };
+$('wDel').onclick = () => { const t = targets(); if (t && confirm('Effacer le réseau ' + (+$('wSlot').value + 1) + ' sur les montres sélectionnées ?')) cmd({ type: 'wifi', targets: t, slot: +$('wSlot').value, ssid: '', pass: '' }) };
 $('lum').oninput = () => $('lumV').textContent = $('lum').value + ' %';
-$('lumSend').onclick = () => { const t = targets(); if (t) ws.send({ type: 'lum', targets: t, value: +$('lum').value }) };
+$('lumSend').onclick = () => { const t = targets(); if (t) cmd({ type: 'lum', targets: t, value: +$('lum').value }) };
 async function loadFw() {
   try { const i = await (await fetch('/api/firmware')).json();
     $('fwInfo').textContent = i.present ? 'Firmware prêt : version ' + i.version + ' (' + Math.round(i.size / 1024) + ' Ko)' : 'Aucun firmware déposé';
@@ -204,7 +205,7 @@ $('fwFile').onchange = async () => {
   const f = $('fwFile').files[0]; $('fwFile').value = ''; if (!f) return;
   const r = await fetch('/api/firmware', { method: 'POST', body: f }); if (!r.ok) alert('Fichier refusé : ce n\'est pas un firmware StageWatch valide'); loadFw();
 };
-$('fwGo').onclick = () => { const t = targets(); if (t && confirm('Mettre à jour ' + t.length + ' montre(s) ? Elles redémarrent ensuite (~30 s).')) ws.send({ type: 'ota', targets: t }) };
+$('fwGo').onclick = () => { const t = targets(); if (t && confirm('Mettre à jour ' + t.length + ' montre(s) ? Elles redémarrent ensuite (~30 s).')) cmd({ type: 'ota', targets: t }) };
 
 // ---- Édition nom + photo ----
 let editId = 0, pendingPhoto = null, removePhoto = false;

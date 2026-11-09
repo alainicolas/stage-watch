@@ -23,6 +23,7 @@
 #include "config.h"
 #include "battery_cal.h"
 #include "logo.h"
+#define LOGO_BOTTOM 16
 
 #ifdef SW_DEBUG
 #define LOG(...) Serial.printf(__VA_ARGS__)
@@ -270,9 +271,9 @@ void drawInfo() {
   if (!batCalOk) bat += " !";
   row("Batterie", bat, C_TXT);
   row("Version", FW_VERSION, C_MUT);
-  // Logo centré sous la version, décollé du bas de l écran
+  // Logo centré sous la version, décollé du bas de l'écran (LOGO_BOTTOM px de marge ; les lignes de texte finissent vers y=166)
   frame.setSwapBytes(true);   // LOGO est en RGB565 standard
-  frame.pushImage((W - LOGO_W) / 2, H - LOGO_H - 16, LOGO_W, LOGO_H, LOGO);
+  frame.pushImage((W - LOGO_W) / 2, H - LOGO_H - LOGO_BOTTOM, LOGO_W, LOGO_H, LOGO);
   frame.setSwapBytes(false);
 }
 
@@ -318,6 +319,9 @@ void sendHello() {
   d["lum"] = lumPct;
   wsSend(d);
 }
+bool otaRequested = false, otaRunning = false;
+int otaLastPct = -1;
+uint32_t serverSeenAt = 0;   // dernière annonce reçue du serveur actuel
 void sendOta(const char* state, int pct = -1, const String& err = "") {
   JsonDocument d; d["type"] = "ota"; d["state"] = state;
   if (pct >= 0) d["pct"] = pct;
@@ -362,17 +366,20 @@ void drawCentered(const char* l1, const String& l2, uint16_t col) {
 void doOta() {
   int b = batteryPercent();
   if (!pmu.isVbusIn() && b < 50) { sendOta("refused", -1, "batterie " + String(b) + "% (50% minimum ou câble USB)"); return; }
+  // Lancée depuis loop() (jamais depuis le callback WebSocket) ; moteur coupé avant de bloquer
+  otaRunning = true;
+  motor(false); buzzStep = -1;
   sendOta("start");
   screenWake(); setBrightness(BRIGHT_FULL);
   drawCentered("Mise a jour", "0%", C_ACC);
-  static int lastPct = -1; lastPct = -1;
+  otaLastPct = -1;
   httpUpdate.rebootOnUpdate(false);
   httpUpdate.onProgress([](int cur, int total) {
     int pct = total > 0 ? (int)((int64_t)cur * 100 / total) : 0;
-    if (pct == lastPct) return;
-    lastPct = pct;
+    if (pct == otaLastPct) return;
+    otaLastPct = pct;
     drawCentered("Mise a jour", String(pct) + "%", C_ACC);
-    if (pct % 10 == 0) { sendOta("progress", pct); ws.loop(); }
+    if (pct % 10 == 0) sendOta("progress", pct);  // envoi seul, sans ws.loop() (pas de réentrance)
   });
   WiFiClient client;
   HTTPUpdateResult res = httpUpdate.update(client, serverHost, serverPort, "/firmware.bin");
@@ -386,6 +393,7 @@ void doOta() {
   sendOta("error", -1, err);
   drawCentered("Mise a jour", "ECHEC", C_BAD);
   delay(2000);
+  otaRunning = false;
   render();
 }
 
@@ -399,6 +407,7 @@ void onWs(WStype_t type, uint8_t* payload, size_t len) {
       JsonDocument d;
       if (deserializeJson(d, payload, len)) return;
       const char* t = d["type"] | "";
+      if (otaRunning) return;  // mise à jour en cours : on ignore tout
       if (!strcmp(t, "msg")) {
         buzzMessage();
         curText = String(d["text"] | "");
@@ -412,7 +421,7 @@ void onWs(WStype_t type, uint8_t* payload, size_t len) {
         // {slot 0..2, ssid, pass} ; ssid vide = effacer. Jamais le réseau utilisé en ce moment.
         int i = d["slot"] | -1;
         if (i < 0 || i > 2) return;
-        if (WiFi.isConnected() && i == wifiSlot) { sendOta("wifi-refused"); return; }
+        if (WiFi.isConnected() && i == wifiSlot) { JsonDocument x; x["type"] = "wifi-refused"; wsSend(x); return; }
         wifiSsid[i] = String(d["ssid"] | ""); wifiPass[i] = String(d["pass"] | "");
         prefs.putString(("s" + String(i)).c_str(), wifiSsid[i]);
         prefs.putString(("p" + String(i)).c_str(), wifiPass[i]);
@@ -424,7 +433,7 @@ void onWs(WStype_t type, uint8_t* payload, size_t len) {
         if (!screenOff) applyLum();
         sendHello();
       } else if (!strcmp(t, "ota")) {
-        doOta();
+        otaRequested = true;   // exécutée par loop()
       } else if (!strcmp(t, "clear")) {
         curText = ""; if (!screenOff) setBrightness(BRIGHT_IDLE); render();
       }
@@ -451,7 +460,13 @@ void discover() {
   String ip = udp.remoteIP().toString();
   int p = atoi(buf + 10);  // "STAGEWATCH <port>"
   uint16_t port = (p > 0 && p < 65536) ? p : SERVER_PORT;
-  if (ip != serverHost || port != serverPort) {
+  bool same = ip == serverHost && port == serverPort;
+  if (same) { serverSeenAt = millis(); return; }
+  // Connecté : on ne change de serveur que si l'actuel ne s'annonce plus depuis 5 s
+  // (évite d'osciller quand le Mac s'annonce par deux interfaces, ex. câble + Wi-Fi)
+  if (wsConnected && millis() - serverSeenAt < 5000) return;
+  {
+    serverSeenAt = millis();
     LOG("Serveur trouvé : %s:%u\n", ip.c_str(), port);
     serverHost = ip;
     serverPort = port;
@@ -538,6 +553,7 @@ void loop() {
   hapticTick();
   handleButton();
   wifiTick();
+  if (otaRequested) { otaRequested = false; doOta(); }
   discover();
   if (wsStarted) ws.loop();
 

@@ -19,6 +19,7 @@ import (
 	"runtime"
 	"sort"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -107,7 +108,9 @@ func newHub(dataDir string) *Hub {
 	h.dataDir = dataDir
 	h.cfg = Config{Names: map[string]string{}, Photos: map[string]int64{}}
 	if b, err := os.ReadFile(h.cfgPath); err == nil {
-		_ = json.Unmarshal(b, &h.cfg)
+		if err := json.Unmarshal(b, &h.cfg); err != nil {
+			log.Printf("ATTENTION : %s illisible (%v) — noms et photos par défaut", h.cfgPath, err)
+		}
 		if h.cfg.Names == nil {
 			h.cfg.Names = map[string]string{}
 		}
@@ -164,7 +167,7 @@ func (h *Hub) servePhotoAPI(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		_ = os.MkdirAll(filepath.Join(h.dataDir, "photos"), 0o755)
-		if err := os.WriteFile(h.photoPath(id), b, 0o644); err != nil {
+		if err := writeAtomic(h.photoPath(id), b); err != nil {
 			http.Error(w, err.Error(), 500)
 			return
 		}
@@ -203,7 +206,9 @@ func (h *Hub) servePhoto(w http.ResponseWriter, r *http.Request) {
 
 func (h *Hub) saveCfg() {
 	b, _ := json.MarshalIndent(h.cfg, "", "  ")
-	_ = os.WriteFile(h.cfgPath, b, 0o644)
+	if err := writeAtomic(h.cfgPath, b); err != nil {
+		log.Printf("ATTENTION : réglages non enregistrés : %v", err)
+	}
 }
 
 func (h *Hub) logf(format string, a ...any) {
@@ -304,8 +309,10 @@ func (h *Hub) sendText(targets []int, text string) {
 			wid, mid := id, m.MsgID
 			time.AfterFunc(landing, func() { h.deliverHeld(wid, mid) })
 		} else {
-			h.deliver(w)
-			h.logf("ENVOI   -> %d (%s) : %q%s", id, w.Name, text, map[bool]string{true: "", false: "  [montre hors ligne, sera livré à la reconnexion]"}[w.conn != nil])
+			if w.conn != nil {
+				w.conn.push(msgFrame(m))
+			}
+			h.logf("ENVOI   -> %d (%s) : %q%s", id, w.Name, text, ifs(w.conn != nil, "", offlineNote))
 		}
 	}
 	if len(ids) == 0 {
@@ -319,11 +326,44 @@ func (h *Hub) sendText(targets []int, text string) {
 	h.pushState()
 }
 
-// à appeler avec h.mu verrouillé
-func (h *Hub) deliver(w *Watch) {
-	if w.conn != nil && w.Last != nil {
-		w.conn.push(enc(map[string]any{"type": "msg", "msgId": w.Last.MsgID, "text": w.Last.Text}))
+// Trame « message » envoyée à une montre
+func msgFrame(m *Message) []byte {
+	return enc(map[string]any{"type": "msg", "msgId": m.MsgID, "text": m.Text})
+}
+
+// ifs : texte conditionnel pour les journaux
+func ifs(cond bool, a, b string) string {
+	if cond {
+		return a
 	}
+	return b
+}
+
+const offlineNote = "  [montre hors ligne, sera livré à la reconnexion]"
+
+// writeAtomic : écrit dans un fichier temporaire puis le renomme (jamais de fichier à moitié écrit)
+func writeAtomic(path string, b []byte) error {
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, b, 0o644); err != nil {
+		return err
+	}
+	return os.Rename(tmp, path)
+}
+
+// versionAtLeast compare des versions « a.b.c » numériquement ("0.10" > "0.2")
+func versionAtLeast(v, min string) bool {
+	pv, pm := strings.Split(v, "."), strings.Split(min, ".")
+	for i := 0; i < len(pm); i++ {
+		a, b := 0, 0
+		if i < len(pv) {
+			a, _ = strconv.Atoi(pv[i])
+		}
+		b, _ = strconv.Atoi(pm[i])
+		if a != b {
+			return a > b
+		}
+	}
+	return true
 }
 
 // Fin de l'animation en mode révélation : on libère le message vers la montre.
@@ -340,17 +380,21 @@ func (h *Hub) deliverHeld(id int, msgID int64) {
 			break
 		}
 	}
+	last := w.Last != nil && w.Last.MsgID == msgID
+	if m == nil && last {
+		m = w.Last // sorti de l'historique (500 max) entre-temps : on se fie au dernier message de la montre
+	}
 	if m == nil || !m.Pending {
 		return
 	}
 	m.Pending = false
-	if w.Last != nil && w.Last.MsgID == msgID {
+	if last {
 		w.Last.Pending = false
 	}
 	if w.conn != nil {
-		w.conn.push(enc(map[string]any{"type": "msg", "msgId": m.MsgID, "text": m.Text}))
+		w.conn.push(msgFrame(m))
 	}
-	h.logf("RÉVÉLÉ  -> %d (%s)%s", id, w.Name, map[bool]string{true: "", false: "  [montre hors ligne, sera livré à la reconnexion]"}[w.conn != nil])
+	h.logf("RÉVÉLÉ  -> %d (%s)%s", id, w.Name, ifs(w.conn != nil, "", offlineNote))
 	h.pushState()
 }
 
@@ -380,7 +424,7 @@ func (h *Hub) setPower(w *Watch, m inMsg, battery int) {
 	if now := time.Now().UnixMilli(); !w.Sim && m.MV > 0 && now-w.lastBatLog >= 5*60*1000 {
 		w.lastBatLog = now
 		h.logf("BATTERIE montre %d : %d%% %.2fV%s", w.ID, battery, float64(m.MV)/1000,
-			map[bool]string{true: " (USB branché)", false: " (sur batterie)"}[m.USB])
+			ifs(m.USB, " (USB branché)", " (sur batterie)"))
 	}
 }
 
@@ -411,11 +455,11 @@ func (h *Hub) watchHello(c *client, id, battery int, sim bool, m inMsg) {
 	w.lastBatLog = 0
 	h.setPower(w, m, battery)
 	w.LastSeen = time.Now().UnixMilli()
-	h.logf("CONNEXION montre %d (%s)%s%s", id, w.Name, map[bool]string{true: " [simulateur]", false: ""}[sim],
-		map[bool]string{true: " firmware " + m.FW, false: ""}[m.FW != ""])
+	h.logf("CONNEXION montre %d (%s)%s%s", id, w.Name, ifs(sim, " [simulateur]", ""),
+		ifs(m.FW != "", " firmware "+m.FW, ""))
 	// Re-livre le dernier message s'il n'a pas été confirmé
 	if w.Last != nil && !w.Last.Acked && !w.Last.Pending {
-		c.push(enc(map[string]any{"type": "msg", "msgId": w.Last.MsgID, "text": w.Last.Text}))
+		c.push(msgFrame(w.Last))
 	}
 	h.pushState()
 }
@@ -493,37 +537,37 @@ func (h *Hub) watchOta(c *client, m inMsg) {
 	case "error":
 		w.OTA = "échec : " + m.Err
 		h.logf("MISE À JOUR montre %d en échec : %s", w.ID, m.Err)
-	case "wifi-refused":
-		w.OTA = "réseau en cours d'utilisation : non modifié"
 	}
 	h.pushState()
 }
 
-// Commande de réglage vers des montres connectées
-func (h *Hub) toWatches(targets []int, v any) {
+// Commande de réglage vers des montres connectées (firmware 0.2 minimum)
+func (h *Hub) toWatches(targets []int, v any, isOta bool) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	b := enc(v)
 	for _, id := range targets {
-		if w, ok := h.watches[id]; ok && w.conn != nil && !w.Sim {
-			if w.FW == "" || w.FW < "0.2" {
-				w.OTA = "firmware " + w.FW + " trop ancien : un flash USB est nécessaire"
-				continue
-			}
-			if m, ok := v.(map[string]any); ok && m["type"] == "ota" {
-				w.OTA = "demandée…"
-				conn := w.conn
-				time.AfterFunc(30*time.Second, func() {
-					h.mu.Lock()
-					defer h.mu.Unlock()
-					if w.conn == conn && w.OTA == "demandée…" {
-						w.OTA = "pas de réponse de la montre"
-						h.pushState()
-					}
-				})
-			}
-			w.conn.push(b)
+		w, ok := h.watches[id]
+		if !ok || w.conn == nil || w.Sim {
+			continue
 		}
+		if !versionAtLeast(w.FW, "0.2") {
+			w.OTA = "firmware " + w.FW + " trop ancien : un flash USB est nécessaire"
+			continue
+		}
+		if isOta {
+			w.OTA = "demandée…"
+			conn := w.conn
+			time.AfterFunc(30*time.Second, func() {
+				h.mu.Lock()
+				defer h.mu.Unlock()
+				if w.conn == conn && w.OTA == "demandée…" {
+					w.OTA = "pas de réponse de la montre"
+					h.pushState()
+				}
+			})
+		}
+		w.conn.push(b)
 	}
 	h.pushState()
 }
@@ -535,11 +579,11 @@ func (h *Hub) serveFirmwareAPI(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	if r.Method == http.MethodPost {
 		b, err := io.ReadAll(io.LimitReader(r.Body, 3<<20+1))
-		if err != nil || len(b) < 1024 || len(b) > 3<<20 || b[0] != 0xE9 {
+		if err != nil || len(b) < 1024 || len(b) > 3<<20 || b[0] != 0xE9 || fwVersion(b) == "?" {
 			http.Error(w, `{"error":"fichier firmware invalide"}`, 400)
 			return
 		}
-		if err := os.WriteFile(h.firmwarePath(), b, 0o644); err != nil {
+		if err := writeAtomic(h.firmwarePath(), b); err != nil {
 			http.Error(w, `{"error":"écriture impossible"}`, 500)
 			return
 		}
@@ -705,11 +749,18 @@ func (h *Hub) handle(c *client, m inMsg) {
 			h.watchAck(c, m.MsgID)
 		case "ota":
 			h.watchOta(c, m)
+		case "wifi-refused":
+			h.mu.Lock()
+			if w, ok := h.watches[c.id]; ok && w.conn == c {
+				w.OTA = "réseau en cours d'utilisation : non modifié"
+				h.pushState()
+			}
+			h.mu.Unlock()
 		}
 	case "admin":
 		switch m.Type {
 		case "send":
-			text := []rune(m.Text)
+			text := []rune(strings.TrimSpace(m.Text))
 			if len(text) == 0 {
 				return
 			}
@@ -721,18 +772,18 @@ func (h *Hub) handle(c *client, m inMsg) {
 			h.clearWatches(h.resolveTargets(m.Targets))
 		case "wifi":
 			if m.Slot != nil && *m.Slot >= 0 && *m.Slot <= 2 && len(m.SSID) <= 32 && len(m.Pass) <= 63 {
-				h.toWatches(h.resolveTargets(m.Targets), map[string]any{"type": "wifi", "slot": *m.Slot, "ssid": m.SSID, "pass": m.Pass})
+				h.toWatches(h.resolveTargets(m.Targets), map[string]any{"type": "wifi", "slot": *m.Slot, "ssid": m.SSID, "pass": m.Pass}, false)
 				h.mu.Lock()
 				h.logf("RÉGLAGE Wi-Fi réseau %d = %q envoyé", *m.Slot+1, m.SSID)
 				h.mu.Unlock()
 			}
 		case "lum":
 			if m.Value >= 10 && m.Value <= 100 {
-				h.toWatches(h.resolveTargets(m.Targets), map[string]any{"type": "lum", "value": m.Value})
+				h.toWatches(h.resolveTargets(m.Targets), map[string]any{"type": "lum", "value": m.Value}, false)
 			}
 		case "ota":
 			if _, err := os.Stat(h.firmwarePath()); err == nil {
-				h.toWatches(h.resolveTargets(m.Targets), map[string]any{"type": "ota"})
+				h.toWatches(h.resolveTargets(m.Targets), map[string]any{"type": "ota"}, true)
 			}
 		case "settings":
 			h.mu.Lock()
