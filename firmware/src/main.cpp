@@ -12,6 +12,7 @@
 #include <Wire.h>
 #include <WiFi.h>
 #include <WiFiUdp.h>
+#include <HTTPUpdate.h>
 #include <Preferences.h>
 #include <TFT_eSPI.h>
 #include <U8g2_for_TFT_eSPI.h>
@@ -52,6 +53,13 @@ int menuId = 1;
 volatile bool pmuIrq = false;
 bool hasDrv = false;
 uint8_t curBright = 0;
+int lumPct = 100;            // luminosité réglée depuis l'admin (10..100 %), appliquée à tous les niveaux
+
+// Wi-Fi : 3 réseaux mémorisés (préférences). Le n°1 vaut par défaut celui de secrets.h.
+String wifiSsid[3], wifiPass[3];
+int wifiSlot = -1;           // réseau en cours d'essai / utilisé
+uint32_t wifiTryAt = 0;
+#define WIFI_TRY_MS 15000    // temps laissé à un réseau avant de passer au suivant
 
 // Grille de texte FIXE : 12 colonnes x 8 lignes = 96 caractères (identique au simulateur et à la page public).
 // Police à chasse fixe (accents OK). Coupure entre les mots ; un mot de plus de 12 lettres est coupé.
@@ -67,8 +75,9 @@ void IRAM_ATTR onPmu() { pmuIrq = true; }
 void setBrightness(uint8_t v) {
   if (v == curBright) return;
   curBright = v;
-  ledcWrite(0, v);
+  ledcWrite(0, (uint32_t)v * lumPct / 100);
 }
+void applyLum() { ledcWrite(0, (uint32_t)curBright * lumPct / 100); }
 
 // Écran : extinction complète (rétroéclairage coupé + écran en veille) et réveil
 void screenSleep() {
@@ -295,7 +304,82 @@ void wsSend(JsonDocument& d) {
 void sendHello() {
   JsonDocument d; d["type"] = "hello"; d["id"] = watchId; d["battery"] = batteryPercent(); d["fw"] = FW_VERSION;
   d["mv"] = pmu.getBattVoltage(); d["chg"] = pmu.isCharging(); d["usb"] = pmu.isVbusIn();
+  JsonArray nets = d["wifi"].to<JsonArray>();
+  for (int i = 0; i < 3; i++) nets.add(wifiSsid[i]);   // noms seulement, jamais les mots de passe
+  d["slot"] = WiFi.isConnected() ? wifiSlot : -1;
+  d["rssi"] = WiFi.RSSI();
+  d["lum"] = lumPct;
   wsSend(d);
+}
+void sendOta(const char* state, int pct = -1, const String& err = "") {
+  JsonDocument d; d["type"] = "ota"; d["state"] = state;
+  if (pct >= 0) d["pct"] = pct;
+  if (err.length()) d["err"] = err;
+  wsSend(d);
+}
+
+// ---------- Wi-Fi ----------
+void loadWifi() {
+  for (int i = 0; i < 3; i++) {
+    wifiSsid[i] = prefs.getString(("s" + String(i)).c_str(), i == 0 ? WIFI_SSID : "");
+    wifiPass[i] = prefs.getString(("p" + String(i)).c_str(), i == 0 ? WIFI_PASSWORD : "");
+  }
+}
+void wifiTryNext() {
+  for (int k = 1; k <= 3; k++) {
+    int i = (wifiSlot + k + 3) % 3;
+    if (wifiSsid[i].isEmpty()) continue;
+    wifiSlot = i;
+    WiFi.disconnect();
+    WiFi.begin(wifiSsid[i].c_str(), wifiPass[i].c_str());
+    wifiTryAt = millis();
+    LOG("Wi-Fi : essai réseau %d (%s)\n", i + 1, wifiSsid[i].c_str());
+    return;
+  }
+}
+void wifiTick() {
+  if (WiFi.isConnected()) { wifiTryAt = millis(); return; }
+  if (millis() - wifiTryAt > WIFI_TRY_MS) wifiTryNext();
+}
+
+// ---------- Mise à jour sans fil ----------
+void drawCentered(const char* l1, const String& l2, uint16_t col) {
+  frame.fillSprite(C_BG);
+  u8f.begin(frame); u8f.setFontMode(1);
+  u8f.setFont(u8g2_font_helvB14_tf); u8f.setForegroundColor(C_MUT);
+  u8f.setCursor((W - u8f.getUTF8Width(l1)) / 2, 100); u8f.print(l1);
+  u8f.setFont(u8g2_font_fub25_tf); u8f.setForegroundColor(col);
+  u8f.setCursor((W - u8f.getUTF8Width(l2.c_str())) / 2, 150); u8f.print(l2);
+  frame.pushSprite(0, 0);
+}
+void doOta() {
+  int b = batteryPercent();
+  if (!pmu.isVbusIn() && b < 50) { sendOta("refused", -1, "batterie " + String(b) + "% (50% minimum ou câble USB)"); return; }
+  sendOta("start");
+  screenWake(); setBrightness(BRIGHT_FULL);
+  drawCentered("Mise a jour", "0%", C_ACC);
+  static int lastPct = -1; lastPct = -1;
+  httpUpdate.rebootOnUpdate(false);
+  httpUpdate.onProgress([](int cur, int total) {
+    int pct = total > 0 ? (int)((int64_t)cur * 100 / total) : 0;
+    if (pct == lastPct) return;
+    lastPct = pct;
+    drawCentered("Mise a jour", String(pct) + "%", C_ACC);
+    if (pct % 10 == 0) { sendOta("progress", pct); ws.loop(); }
+  });
+  WiFiClient client;
+  HTTPUpdateResult res = httpUpdate.update(client, serverHost, serverPort, "/firmware.bin");
+  if (res == HTTP_UPDATE_OK) {
+    sendOta("ok"); ws.loop();
+    drawCentered("Mise a jour", "OK", C_OK);
+    delay(800);
+    ESP.restart();
+  }
+  String err = httpUpdate.getLastErrorString();
+  sendOta("error", -1, err);
+  drawCentered("Mise a jour", "ECHEC", C_BAD);
+  delay(2000);
+  render();
 }
 
 void onWs(WStype_t type, uint8_t* payload, size_t len) {
@@ -317,6 +401,23 @@ void onWs(WStype_t type, uint8_t* payload, size_t len) {
         setBrightness(BRIGHT_FULL);
         render();
         JsonDocument a; a["type"] = "ack"; a["msgId"] = d["msgId"]; wsSend(a);
+      } else if (!strcmp(t, "wifi")) {
+        // {slot 0..2, ssid, pass} ; ssid vide = effacer. Jamais le réseau utilisé en ce moment.
+        int i = d["slot"] | -1;
+        if (i < 0 || i > 2) return;
+        if (WiFi.isConnected() && i == wifiSlot) { sendOta("wifi-refused"); return; }
+        wifiSsid[i] = String(d["ssid"] | ""); wifiPass[i] = String(d["pass"] | "");
+        prefs.putString(("s" + String(i)).c_str(), wifiSsid[i]);
+        prefs.putString(("p" + String(i)).c_str(), wifiPass[i]);
+        buzzShort();
+        sendHello();
+      } else if (!strcmp(t, "lum")) {
+        lumPct = constrain((int)(d["value"] | 100), 10, 100);
+        prefs.putInt("lum", lumPct);
+        if (!screenOff) applyLum();
+        sendHello();
+      } else if (!strcmp(t, "ota")) {
+        doOta();
       } else if (!strcmp(t, "clear")) {
         curText = ""; if (!screenOff) setBrightness(BRIGHT_IDLE); render();
       }
@@ -386,6 +487,9 @@ void handleButton() {
   render();
 }
 
+// Marqueur lu par le serveur pour afficher la version d'un firmware.bin déposé
+extern "C" { __attribute__((used)) const char SWFW_TAG[] = "SWFW:" FW_VERSION; }
+
 // ---------- Setup / loop ----------
 void setup() {
 #ifdef SW_DEBUG
@@ -406,15 +510,18 @@ void setup() {
   setBrightness(BRIGHT_IDLE);
   lastActivity = millis();
 
+  (void)*(volatile const char*)SWFW_TAG;
   prefs.begin("stagewatch", false);
   batCalOk = calibrateBatteryOnce(pmu, prefs);
   watchId = constrain(prefs.getInt("id", 1), 1, 8);
+  lumPct = constrain(prefs.getInt("lum", 100), 10, 100);
+  loadWifi();
   render();
 
   WiFi.mode(WIFI_STA);
   WiFi.setSleep(false);          // latence minimale (au prix de la batterie)
   WiFi.setAutoReconnect(true);
-  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+  wifiTryNext();
   udp.begin(DISCOVERY_PORT);
   if (strlen(SERVER_FALLBACK_HOST)) { serverHost = SERVER_FALLBACK_HOST; startWs(); }
 }
@@ -422,6 +529,7 @@ void setup() {
 void loop() {
   hapticTick();
   handleButton();
+  wifiTick();
   discover();
   if (wsStarted) ws.loop();
 
@@ -430,6 +538,7 @@ void loop() {
     lastBeat = now;
     JsonDocument d; d["type"] = "hb"; d["battery"] = batteryPercent();
     d["mv"] = pmu.getBattVoltage(); d["chg"] = pmu.isCharging(); d["usb"] = pmu.isVbusIn();
+    d["rssi"] = WiFi.RSSI();
     wsSend(d);
   }
   // Luminosité : pleine après un message, puis réduite (le texte reste visible), puis écran éteint

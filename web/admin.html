@@ -54,15 +54,38 @@ dialog .bigph{width:120px;height:120px;border-radius:50%;margin:0 auto 12px;back
 dialog input[type=text]{width:100%;background:#0b0d10;color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:10px;font:inherit;font-size:17px}
 dialog .btns{display:flex;gap:8px;justify-content:center;margin:10px 0 16px;flex-wrap:wrap}
 dialog .end{display:flex;justify-content:flex-end;gap:8px;margin-top:16px}
+.cfg{display:none;background:var(--panel);border:1px solid var(--acc);border-radius:12px;padding:14px;margin-top:14px}
+body.setup .cfg{display:block}body.setup .compose{display:none}
+.cfg h3{margin:0 0 4px;font-size:15px}.cfg section{border-top:1px solid var(--line);padding:12px 0 4px;margin-top:10px}
+.cfg input[type=text],.cfg input[type=password],.cfg select{background:#0b0d10;color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:8px;font:inherit}
+.cfg .row{flex-wrap:wrap}
+.w .tech{display:none;font-size:11px;color:var(--mut);line-height:1.5}body.setup .w .tech{display:block}
+.w .tech .ota{color:var(--acc)}
+#setupBtn.on{background:var(--acc);color:#111;border:none}
 </style></head><body>
 <header><span class="dot" id="conn"></span><h1>StageWatch · Dirigeant</h1><span class="sp"></span>
-<span id="ips" class="hint" style="margin:0"></span><a href="/public" target="_blank">Page public ↗</a><a href="/sim" target="_blank">Simulateur ↗</a></header>
+<button id="setupBtn" title="Réglages des montres : Wi-Fi, luminosité, mise à jour">⚙ Réglages montres</button><span id="ips" class="hint" style="margin:0"></span><a href="/public" target="_blank">Page public ↗</a><a href="/sim" target="_blank">Simulateur ↗</a></header>
 <main>
 <section>
   <div class="grid" id="grid"></div>
   <div class="bar">
     <button id="all">Tout sélectionner</button><button id="none">Tout désélectionner</button>
     <button id="clr" title="Efface l'écran des montres sélectionnées (et la case public)">Effacer l'écran</button>
+  </div>
+  <div class="cfg">
+    <h3>Réglages des montres</h3>
+    <div class="hint" style="margin:0">S'applique aux montres <b>sélectionnées et connectées</b>. Pas de câble : tout passe par le Wi-Fi et reste en mémoire dans la montre.</div>
+    <section><b>Wi-Fi</b> <span class="hint">3 réseaux mémorisés ; la montre prend celui qui est disponible. Le réseau utilisé en ce moment ne peut pas être modifié (sécurité).</span>
+      <div class="row"><select id="wSlot"><option value="0">Réseau 1</option><option value="1">Réseau 2</option><option value="2">Réseau 3</option></select>
+        <input type="text" id="wSsid" placeholder="Nom du réseau" maxlength="32">
+        <input type="password" id="wPass" placeholder="Mot de passe" maxlength="63">
+        <button id="wSend">Envoyer</button><button id="wDel" class="danger">Effacer ce réseau</button></div></section>
+    <section><b>Luminosité</b>
+      <div class="row"><input type="range" id="lum" min="10" max="100" step="5" value="100"><span id="lumV">100 %</span><button id="lumSend">Appliquer</button></div></section>
+    <section><b>Mise à jour du firmware</b> <span class="hint">Chaque montre se met à jour si elle est branchée ou à 50 % minimum.</span>
+      <div class="row"><span id="fwInfo" class="hint" style="margin:0">…</span><span class="sp"></span>
+        <button id="fwPick">Déposer un firmware.bin…</button><input type="file" id="fwFile" accept=".bin" hidden>
+        <button id="fwGo" class="primary" style="font-size:15px;padding:8px 16px">Mettre à jour</button></div></section>
   </div>
   <div class="compose">
     <div class="to" id="to"></div>
@@ -114,6 +137,7 @@ function render() {
         <div class="who"><div class="name">${esc(w.name)}</div>
           <div class="meta">${status(w)}<span class="bat ${w.battery >= 0 && w.battery < 20 ? 'low' : ''}" title="${w.mv ? (w.mv / 1000).toFixed(2) + ' V' : ''}${w.fw ? ' · firmware ' + esc(w.fw) : ''}">${w.battery >= 0 ? (w.usb ? '🔌' : '🔋') + w.battery + '%' : ''}${w.mv ? ' · ' + (w.mv / 1000).toFixed(2) + 'V' : ''}</span>${w.sim ? '<span>sim</span>' : ''}</div></div>
       </div>
+      <div class="tech">${w.online && !w.sim ? `Firmware ${esc(w.fw || '?')} · ${w.slot >= 0 && w.wifi ? 'Wi-Fi ' + (w.slot + 1) + ' « ' + esc(w.wifi[w.slot]) + ' »' : 'Wi-Fi ?'} · ${w.rssi ? w.rssi + ' dBm' : ''} · lum. ${w.lum || '?'} %<br>Réseaux : ${(w.wifi || []).map((n, i) => (i + 1) + '. ' + (n ? esc(n) : '—')).join(' ')}${w.ota ? `<br><span class="ota">${esc(w.ota)}</span>` : ''}` : 'hors ligne'}</div>
       <div class="last ${w.last ? '' : 'empty'}">${w.last ? `<div class="tgrid" data-txt="${esc(w.last.text)}"></div>` : w.id}</div>
       <div class="lt">${w.last ? `<span>${hhmm(w.last.time)}</span><span>${w.last.acked ? '<span class="st ok">✓ reçu</span>' : w.last.pending ? '<span class="st wait">⏳ révélation</span>' : '<span class="st wait">… envoi</span>'}</span>` : '&nbsp;'}</div>
     </div>`).join('');
@@ -158,6 +182,29 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Escape') { sel.clear(); render(); return }
   const k = +e.key; if (k >= 1 && k <= 8) { sel.has(k) ? sel.delete(k) : sel.add(k); render() }
 });
+
+// ---- Réglages des montres ----
+$('setupBtn').onclick = () => { $('setupBtn').classList.toggle('on', document.body.classList.toggle('setup')); loadFw() };
+const targets = () => { if (!sel.size) { alert('Sélectionne d\'abord une ou plusieurs montres'); return null } return [...sel] };
+$('wSend').onclick = () => {
+  const t = targets(); if (!t) return; const ssid = $('wSsid').value.trim();
+  if (!ssid) { alert('Nom du réseau vide'); return }
+  ws.send({ type: 'wifi', targets: t, slot: +$('wSlot').value, ssid, pass: $('wPass').value }); $('wPass').value = '';
+};
+$('wDel').onclick = () => { const t = targets(); if (t && confirm('Effacer le réseau ' + (+$('wSlot').value + 1) + ' sur les montres sélectionnées ?')) ws.send({ type: 'wifi', targets: t, slot: +$('wSlot').value, ssid: '', pass: '' }) };
+$('lum').oninput = () => $('lumV').textContent = $('lum').value + ' %';
+$('lumSend').onclick = () => { const t = targets(); if (t) ws.send({ type: 'lum', targets: t, value: +$('lum').value }) };
+async function loadFw() {
+  try { const i = await (await fetch('/api/firmware')).json();
+    $('fwInfo').textContent = i.present ? 'Firmware prêt : version ' + i.version + ' (' + Math.round(i.size / 1024) + ' Ko)' : 'Aucun firmware déposé';
+    $('fwGo').disabled = !i.present } catch (_) {}
+}
+$('fwPick').onclick = () => $('fwFile').click();
+$('fwFile').onchange = async () => {
+  const f = $('fwFile').files[0]; $('fwFile').value = ''; if (!f) return;
+  const r = await fetch('/api/firmware', { method: 'POST', body: f }); if (!r.ok) alert('Fichier refusé : ce n\'est pas un firmware StageWatch valide'); loadFw();
+};
+$('fwGo').onclick = () => { const t = targets(); if (t && confirm('Mettre à jour ' + t.length + ' montre(s) ? Elles redémarrent ensuite (~30 s).')) ws.send({ type: 'ota', targets: t }) };
 
 // ---- Édition nom + photo ----
 let editId = 0, pendingPhoto = null, removePhoto = false;

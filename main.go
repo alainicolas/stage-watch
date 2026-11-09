@@ -3,6 +3,7 @@
 package main
 
 import (
+	"bytes"
 	"embed"
 	"encoding/json"
 	"flag"
@@ -62,6 +63,11 @@ type Watch struct {
 	Last       *Message `json:"last"`
 	Sim        bool     `json:"sim"`
 	Photo      string   `json:"photo"`
+	WiFi       []string `json:"wifi,omitempty"` // noms des 3 réseaux mémorisés
+	Slot       int      `json:"slot"`           // réseau utilisé (0..2), -1 inconnu
+	RSSI       int      `json:"rssi"`           // signal Wi-Fi (dBm)
+	Lum        int      `json:"lum"`            // luminosité (%)
+	OTA        string   `json:"ota,omitempty"`  // état de la mise à jour en cours
 	conn       *client
 }
 
@@ -392,6 +398,10 @@ func (h *Hub) watchHello(c *client, id, battery int, sim bool, m inMsg) {
 	w.Online = true
 	w.Sim = sim
 	w.FW = m.FW
+	w.WiFi, w.RSSI, w.Lum, w.Slot = m.WiFi, m.RSSI, m.Lum, -1
+	if m.Slot != nil {
+		w.Slot = *m.Slot
+	}
 	w.lastBatLog = 0
 	h.setPower(w, m, battery)
 	w.LastSeen = time.Now().UnixMilli()
@@ -444,9 +454,112 @@ func (h *Hub) watchBeat(c *client, battery int, m inMsg) {
 	defer h.mu.Unlock()
 	if w, ok := h.watches[c.id]; ok && w.conn == c {
 		h.setPower(w, m, battery)
+		if m.RSSI != 0 {
+			w.RSSI = m.RSSI
+		}
 		w.LastSeen = time.Now().UnixMilli()
 		h.pushState()
 	}
+}
+
+// Retour de mise à jour sans fil envoyé par la montre
+func (h *Hub) watchOta(c *client, m inMsg) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	w, ok := h.watches[c.id]
+	if !ok {
+		return
+	}
+	switch m.State {
+	case "start":
+		w.OTA = "mise à jour 0%"
+		h.logf("MISE À JOUR montre %d : début", w.ID)
+	case "progress":
+		if m.Pct != nil {
+			w.OTA = "mise à jour " + strconv.Itoa(*m.Pct) + "%"
+		}
+	case "ok":
+		w.OTA = "redémarrage…"
+		h.logf("MISE À JOUR montre %d : OK, redémarrage", w.ID)
+	case "refused":
+		w.OTA = "refusée : " + m.Err
+		h.logf("MISE À JOUR montre %d refusée : %s", w.ID, m.Err)
+	case "error":
+		w.OTA = "échec : " + m.Err
+		h.logf("MISE À JOUR montre %d en échec : %s", w.ID, m.Err)
+	case "wifi-refused":
+		w.OTA = "réseau en cours d'utilisation : non modifié"
+	}
+	h.pushState()
+}
+
+// Commande de réglage vers des montres connectées
+func (h *Hub) toWatches(targets []int, v any) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	b := enc(v)
+	for _, id := range targets {
+		if w, ok := h.watches[id]; ok && w.conn != nil && !w.Sim {
+			if w.FW == "" || w.FW < "0.2" {
+				w.OTA = "firmware " + w.FW + " trop ancien : un flash USB est nécessaire"
+				continue
+			}
+			if m, ok := v.(map[string]any); ok && m["type"] == "ota" {
+				w.OTA = "demandée…"
+				conn := w.conn
+				time.AfterFunc(30*time.Second, func() {
+					h.mu.Lock()
+					defer h.mu.Unlock()
+					if w.conn == conn && w.OTA == "demandée…" {
+						w.OTA = "pas de réponse de la montre"
+						h.pushState()
+					}
+				})
+			}
+			w.conn.push(b)
+		}
+	}
+	h.pushState()
+}
+
+func (h *Hub) firmwarePath() string { return filepath.Join(h.dataDir, "firmware.bin") }
+
+// POST /api/firmware : dépose le fichier firmware.bin (mise à jour sans fil) ; GET : infos
+func (h *Hub) serveFirmwareAPI(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	if r.Method == http.MethodPost {
+		b, err := io.ReadAll(io.LimitReader(r.Body, 3<<20+1))
+		if err != nil || len(b) < 1024 || len(b) > 3<<20 || b[0] != 0xE9 {
+			http.Error(w, `{"error":"fichier firmware invalide"}`, 400)
+			return
+		}
+		if err := os.WriteFile(h.firmwarePath(), b, 0o644); err != nil {
+			http.Error(w, `{"error":"écriture impossible"}`, 500)
+			return
+		}
+		h.mu.Lock()
+		h.logf("FIRMWARE déposé (%d Ko, version %s)", len(b)/1024, fwVersion(b))
+		h.mu.Unlock()
+	}
+	if b, err := os.ReadFile(h.firmwarePath()); err == nil {
+		st, _ := os.Stat(h.firmwarePath())
+		w.Write(enc(map[string]any{"present": true, "size": len(b), "version": fwVersion(b), "date": st.ModTime().UnixMilli()}))
+		return
+	}
+	w.Write(enc(map[string]any{"present": false}))
+}
+
+// Version lue dans le firmware : chaîne "SWFW:x.y.z" incluse par le firmware
+func fwVersion(b []byte) string {
+	i := bytes.Index(b, []byte("SWFW:"))
+	if i < 0 {
+		return "?"
+	}
+	j := i + 5
+	for j < len(b) && j < i+25 && b[j] != 0 {
+		j++
+	}
+	return string(b[i+5 : j])
 }
 
 // ---------- WebSocket ----------
@@ -471,6 +584,16 @@ type inMsg struct {
 	Name    string          `json:"name"`
 	Animate bool            `json:"animate"`
 	Reveal  bool            `json:"reveal"`
+	WiFi    []string        `json:"wifi"`
+	Slot    *int            `json:"slot"`
+	RSSI    int             `json:"rssi"`
+	Lum     int             `json:"lum"`
+	Value   int             `json:"value"`
+	SSID    string          `json:"ssid"`
+	Pass    string          `json:"pass"`
+	State   string          `json:"state"`
+	Pct     *int            `json:"pct"`
+	Err     string          `json:"err"`
 }
 
 func (h *Hub) resolveTargets(raw json.RawMessage) []int {
@@ -574,6 +697,8 @@ func (h *Hub) handle(c *client, m inMsg) {
 			h.watchBeat(c, bat, m)
 		case "ack":
 			h.watchAck(c, m.MsgID)
+		case "ota":
+			h.watchOta(c, m)
 		}
 	case "admin":
 		switch m.Type {
@@ -588,6 +713,21 @@ func (h *Hub) handle(c *client, m inMsg) {
 			h.sendText(h.resolveTargets(m.Targets), string(text))
 		case "clear":
 			h.clearWatches(h.resolveTargets(m.Targets))
+		case "wifi":
+			if m.Slot != nil && *m.Slot >= 0 && *m.Slot <= 2 && len(m.SSID) <= 32 && len(m.Pass) <= 63 {
+				h.toWatches(h.resolveTargets(m.Targets), map[string]any{"type": "wifi", "slot": *m.Slot, "ssid": m.SSID, "pass": m.Pass})
+				h.mu.Lock()
+				h.logf("RÉGLAGE Wi-Fi réseau %d = %q envoyé", *m.Slot+1, m.SSID)
+				h.mu.Unlock()
+			}
+		case "lum":
+			if m.Value >= 10 && m.Value <= 100 {
+				h.toWatches(h.resolveTargets(m.Targets), map[string]any{"type": "lum", "value": m.Value})
+			}
+		case "ota":
+			if _, err := os.Stat(h.firmwarePath()); err == nil {
+				h.toWatches(h.resolveTargets(m.Targets), map[string]any{"type": "ota"})
+			}
 		case "settings":
 			h.mu.Lock()
 			a := m.Animate
@@ -707,6 +847,21 @@ func main() {
 	mux.HandleFunc("/ws", h.serveWS)
 	mux.HandleFunc("/api/photo", h.servePhotoAPI)
 	mux.HandleFunc("/photo/", h.servePhoto)
+	mux.HandleFunc("/api/firmware", h.serveFirmwareAPI)
+	mux.HandleFunc("/firmware.bin", func(w http.ResponseWriter, r *http.Request) {
+		// Lu en mémoire et envoyé d'un bloc : le client de mise à jour de l'ESP32 parle HTTP/1.0
+		b, err := os.ReadFile(h.firmwarePath())
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		h.mu.Lock()
+		h.logf("FIRMWARE envoyé à %s (%d Ko)", r.RemoteAddr, len(b)/1024)
+		h.mu.Unlock()
+		w.Header().Set("Content-Type", "application/octet-stream")
+		w.Header().Set("Content-Length", strconv.Itoa(len(b)))
+		w.Write(b)
+	})
 	mux.HandleFunc("/api/info", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Write(enc(map[string]any{"ips": localIPs(), "port": *port}))
