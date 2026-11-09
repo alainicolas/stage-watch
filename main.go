@@ -448,6 +448,11 @@ func (h *Hub) watchHello(c *client, id, battery int, sim bool, m inMsg) {
 	w.Online = true
 	w.Sim = sim
 	w.FW = m.FW
+	// Nouvelle connexion : l'état de mise à jour précédent n'a plus de sens (la montre a redémarré)
+	if w.OTA != "" {
+		h.logf("MISE À JOUR montre %d : terminée, firmware %s", id, m.FW)
+	}
+	w.OTA = ""
 	w.WiFi, w.RSSI, w.Lum, w.Slot = m.WiFi, m.RSSI, m.Lum, -1
 	if m.Slot != nil {
 		w.Slot = *m.Slot
