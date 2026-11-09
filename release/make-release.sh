@@ -35,6 +35,8 @@ PL
 mk_app StageWatch-mac-arm64 StageWatch-Mac-Apple-Silicon.zip
 mk_app StageWatch-mac-intel StageWatch-Mac-Intel.zip
 (cd dist && zip -q "$OUT/StageWatch-Windows.zip" StageWatch.exe)
+# Firmware des montres (mise à jour sans fil depuis l'admin)
+(cd firmware && ~/.pio-venv/bin/pio run -e twatch -s) && cp firmware/.pio/build/twatch/firmware.bin "$OUT/StageWatch-firmware.bin"
 git tag -a "v$V" -m "StageWatch v$V"
 git push origin "v$V"
-gh release create "v$V" "$OUT"/*.zip --title "StageWatch v$V" --notes-file release/NOTES.md
+gh release create "v$V" "$OUT"/*.zip "$OUT"/StageWatch-firmware.bin --title "StageWatch v$V" --notes-file release/NOTES.md

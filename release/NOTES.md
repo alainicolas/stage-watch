@@ -1,3 +1,10 @@
+## Nouveautés de cette version
+- **Réglages des montres sans câble** (bouton ⚙ Réglages montres) : 3 réseaux Wi-Fi, luminosité, **mise à jour du firmware par le Wi-Fi**.
+- Vibration plus marquée mais discrète (3 impulsions, intensité 50 %).
+- Montres : 1 s d'appui pour allumer, menu « numéro » qui se ferme seul, logo sur l'écran d'info.
+- Écran public pensé pour le projecteur : plus contrasté, montres hors ligne masquées, révélation dont la durée s'adapte à la longueur du message.
+- Admin épuré, raccourcis clavier (1–8, 0 = toutes, Échap, Entrée), envoi possible en tapant le message avant de choisir.
+
 ## Télécharger
 
 | Ton ordinateur | Fichier |
@@ -35,7 +42,7 @@ Pour arrêter : ferme la fenêtre noire.
 
 | Page | À quoi ça sert |
 |---|---|
-| **Dirigeant** (s'ouvre tout seul) | Choisir un ou plusieurs participants, taper le message (96 caractères max), Entrée pour envoyer. ✎ sur une case pour changer le nom ou la photo. |
+| **Dirigeant** (s'ouvre tout seul) | Choisir un ou plusieurs participants, taper le message (il doit tenir sur l'écran de la montre ; le compteur le dit), Entrée pour envoyer. Raccourcis : **1–8** = choisir une montre, **0** = toutes, **Échap** = aucune. ✎ sur une case pour changer le nom ou la photo. |
 | **Public** (lien en haut de la page Dirigeant) | À mettre sur l'écran ou le projecteur de la salle. **Double-clic = plein écran.** |
 | **Simulateur** (lien en haut de la page Dirigeant) | Des montres virtuelles, **pour faire une démo sans les vraies montres**. |
 
@@ -52,3 +59,9 @@ Les noms, les photos et l'historique sont enregistrés automatiquement : dans `D
 
 ## Avec les vraies montres
 Le laptop et les montres doivent être sur **le même Wi-Fi en 2,4 GHz**. Les montres trouvent le laptop toutes seules. Préparation des montres : voir [`firmware/README.md`](https://github.com/alainicolas/stage-watch/blob/main/firmware/README.md).
+
+### Mettre à jour les montres (sans câble)
+Pour des montres qui ont déjà le firmware 0.2 ou plus récent :
+1. Télécharge **StageWatch-firmware.bin** ci-dessous.
+2. Dans la page Dirigeant : **⚙ Réglages montres** › **Déposer un firmware.bin…**, puis sélectionne les montres et clique sur **Mettre à jour**.
+3. Chaque montre doit être branchée ou à 50 % de batterie minimum. Elle redémarre toute seule (~30 s).

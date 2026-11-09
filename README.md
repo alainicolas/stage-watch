@@ -30,7 +30,7 @@ Jusqu’à 8 montres (IDs 1 à 8). Les noms et photos (bouton ✎ dans l’admin
 Un message non confirmé est renvoyé automatiquement quand la montre se reconnecte.
 
 ## Animation de la page public (options dans l'admin, sous le message)
-- **Animation public** (activée par défaut) : à chaque envoi, le message apparaît en grand au centre avec les photos des destinataires (~4 s), puis vole vers leurs cases et s’y pose (~6 s au total). Chaque message a sa couleur (palette de 8 qui tourne). La case est allumée à cette couleur pendant 20 s, puis en garde un contour atténué jusqu’à 1 min, puis repasse au gris (ou dès « Effacer l’écran »). Les envois rapprochés passent en file, et l'animation accélère (3 s) quand il y a du retard.
+- **Animation public** (activée par défaut) : à chaque envoi, le message apparaît en grand au centre avec les photos des destinataires (durée selon la longueur : 2,5 s + 0,45 s par mot, de 3,5 à 12 s), puis vole vers leurs cases et s’y pose. Chaque message a sa couleur (palette de 8 qui tourne). La case est allumée à cette couleur pendant 20 s, puis en garde un contour atténué jusqu’à 1 min, puis repasse au gris (ou dès « Effacer l’écran »). Les envois rapprochés passent en file, et la révélation est raccourcie quand il y a du retard.
 - **Révélation public** (désactivée par défaut) : la montre reçoit le message seulement quand il atterrit sur l'écran public. Dans l'admin, la case affiche « ⏳ révélation » en attendant. « Effacer l'écran » annule une révélation en cours.
 - Le serveur planifie la file et envoie à la page public `{type:"send",batch:{id,to,text,delay,dur,reveal}}`. Réglages côté admin : `{type:"settings",animate,reveal}` (enregistrés dans `stagewatch-config.json`).
 
