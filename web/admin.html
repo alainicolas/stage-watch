@@ -64,6 +64,20 @@ body.setup .cfg{display:block}body.setup .compose{display:none}
 #setupBtn.on{background:var(--acc);color:#111;border:none}
 @keyframes nudge{0%,100%{transform:none}25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}
 .grid.nudge .w{animation:nudge .35s 2;border-color:var(--warn)}
+/* --- finition --- */
+body{font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif;-webkit-font-smoothing:antialiased}
+header{padding:14px 24px}header h1{font-weight:600;letter-spacing:-.01em}header a{text-decoration:none}header a:hover{color:var(--fg)}
+.w{border-width:1px;border-radius:12px;padding:14px;gap:10px}
+.w.sel{box-shadow:0 0 0 2px var(--acc);background:var(--panel)}
+.w .name{display:flex;align-items:center;gap:8px;font-weight:600;font-size:15px}
+.sd{width:8px;height:8px;border-radius:50%;flex:none;background:var(--bad)}.sd.ok{background:var(--ok)}.sd.wait{background:var(--warn)}
+.w .meta{font-size:12px;margin-top:2px;font-variant-numeric:tabular-nums}
+.ph{width:40px;height:40px;font-size:15px}
+.w .last{border:1px solid #23272e;border-radius:10px}
+.w .lt{font-size:11px;font-variant-numeric:tabular-nums}
+button{border-radius:8px}button.primary{border-radius:10px}
+.compose,aside,.cfg{border-radius:12px}
+aside h2{font-weight:600}
 </style></head><body>
 <header><span class="dot" id="conn"></span><h1>StageWatch · Dirigeant</h1><span class="sp"></span>
 <button id="setupBtn" title="Réglages des montres : Wi-Fi, luminosité, mise à jour">⚙ Réglages montres</button><span id="ips" class="hint" style="margin:0"></span><a href="/public" target="_blank">Page public ↗</a><a href="/sim" target="_blank">Simulateur ↗</a></header>
@@ -124,22 +138,24 @@ fetch('/api/info').then(r => r.json()).then(i => $('ips').textContent = 'IP : ' 
 
 const initials = n => n.split(/\s+/).filter(Boolean).slice(0, 2).map(x => x[0].toUpperCase()).join('');
 const phStyle = w => w.photo ? `style="background-image:url('${w.photo}')"` : '';
+// État = une pastille discrète (le détail au survol) ; texte seulement quand il faut agir
 function status(w) {
-  if (!w.online) return '<span class="st no">● hors ligne</span>';
-  if (w.last && w.last.pending) return '<span class="st wait">● révélation…</span>';
-  if (w.last && !w.last.acked) return '<span class="st wait">● en attente</span>';
-  return '<span class="st ok">● connectée</span>';
+  if (!w.online) return ['no', 'Hors ligne'];
+  if (w.last && w.last.pending) return ['wait', 'Révélation en cours'];
+  if (w.last && !w.last.acked) return ['wait', 'Message en attente de réception'];
+  return ['ok', 'Connectée'];
 }
+const batText = w => w.battery >= 0 ? w.battery + ' %' : '';
 function render() {
   $('grid').innerHTML = state.watches.map(w => `
     <div class="w ${sel.has(w.id) ? 'sel' : ''} ${w.online ? '' : 'off'}" data-id="${w.id}">
       <button class="edit" data-edit="${w.id}" title="Nom et photo">✎</button>
       <div class="top">
         <div class="ph" ${phStyle(w)}>${w.photo ? '' : esc(initials(w.name))}<span class="num">${w.id}</span></div>
-        <div class="who"><div class="name">${esc(w.name)}</div>
-          <div class="meta">${status(w)}<span class="bat ${w.battery >= 0 && w.battery < 20 ? 'low' : ''}" title="${w.mv ? (w.mv / 1000).toFixed(2) + ' V' : ''}${w.fw ? ' · firmware ' + esc(w.fw) : ''}">${w.battery >= 0 ? (w.usb ? '🔌' : '🔋') + w.battery + '%' : ''}${w.mv ? ' · ' + (w.mv / 1000).toFixed(2) + 'V' : ''}</span>${w.sim ? '<span>sim</span>' : ''}</div></div>
+        <div class="who"><div class="name"><i class="sd ${status(w)[0]}" title="${status(w)[1]}"></i>${esc(w.name)}</div>
+          <div class="meta">${w.online ? `<span class="bat ${w.battery >= 0 && w.battery < 20 ? 'low' : ''}" title="${w.usb ? 'Câble branché' : 'Sur batterie'}">${batText(w)}${w.usb ? ' · en charge' : ''}</span>` : '<span>Hors ligne</span>'}${w.sim ? '<span>simulateur</span>' : ''}</div></div>
       </div>
-      <div class="tech">${w.online && !w.sim ? `Firmware ${esc(w.fw || '?')} · ${w.slot >= 0 && w.wifi ? 'Wi-Fi ' + (w.slot + 1) + ' « ' + esc(w.wifi[w.slot]) + ' »' : 'Wi-Fi ?'} · ${w.rssi ? w.rssi + ' dBm' : ''} · lum. ${w.lum || '?'} %<br>Réseaux : ${(w.wifi || []).map((n, i) => (i + 1) + '. ' + (n ? esc(n) : '—')).join(' ')}${w.ota ? `<br><span class="ota">${esc(w.ota)}</span>` : ''}` : 'hors ligne'}</div>
+      <div class="tech">${w.online && !w.sim ? `Firmware ${esc(w.fw || '?')} · ${w.slot >= 0 && w.wifi ? 'Wi-Fi ' + (w.slot + 1) + ' « ' + esc(w.wifi[w.slot]) + ' »' : 'Wi-Fi ?'} · ${w.rssi ? w.rssi + ' dBm' : ''} · lum. ${w.lum || '?'} %${w.mv ? ' · ' + (w.mv / 1000).toFixed(2) + ' V' : ''}<br>Réseaux : ${(w.wifi || []).map((n, i) => (i + 1) + '. ' + (n ? esc(n) : '—')).join(' ')}${w.ota ? `<br><span class="ota">${esc(w.ota)}</span>` : ''}` : 'hors ligne'}</div>
       <div class="last ${w.last ? '' : 'empty'}">${w.last ? `<div class="tgrid" data-txt="${esc(w.last.text)}"></div>` : w.id}</div>
       <div class="lt">${w.last ? `<span>${hhmm(w.last.time)}</span><span>${w.last.acked ? '<span class="st ok">✓ reçu</span>' : w.last.pending ? '<span class="st wait">⏳ révélation</span>' : '<span class="st wait">… envoi</span>'}</span>` : '&nbsp;'}</div>
     </div>`).join('');
