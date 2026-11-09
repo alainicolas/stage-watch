@@ -1,5 +1,5 @@
 #pragma once
-// Logo (écran info), RGB565, généré par tools/make_logo.py depuis improlex.png
+// Logo (écran info), RGB565 96x42, converti depuis improlex.png
 #include <pgmspace.h>
 #define LOGO_W 96
 #define LOGO_H 42
