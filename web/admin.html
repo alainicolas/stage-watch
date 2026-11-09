@@ -3,37 +3,38 @@
 <title>StageWatch · Dirigeant</title>
 <style>
 :root{--bg:#111418;--panel:#1b2027;--line:#2c333d;--fg:#e8ecf1;--mut:#8b95a3;--acc:#ffd23f;--ok:#3ecf8e;--warn:#f5a524;--bad:#f2555a}
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.4 system-ui,-apple-system,Segoe UI,sans-serif}
-header{display:flex;align-items:center;gap:16px;padding:12px 20px;border-bottom:1px solid var(--line);flex-wrap:wrap}
-header h1{font-size:18px;margin:0}header .sp{flex:1}header a{color:var(--mut);font-size:13px}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.4 Inter,system-ui,-apple-system,"Segoe UI",sans-serif;-webkit-font-smoothing:antialiased}
+header{display:flex;align-items:center;gap:16px;padding:14px 24px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+header h1{font-size:18px;margin:0;font-weight:600;letter-spacing:-.01em}header .sp{flex:1}header a{color:var(--mut);font-size:13px;text-decoration:none}header a:hover{color:var(--fg)}
 .dot{width:10px;height:10px;border-radius:50%;display:inline-block;background:var(--bad)}.dot.on{background:var(--ok)}
 main{display:grid;grid-template-columns:1fr 320px;gap:20px;padding:20px;max-width:1400px;margin:auto}
 @media(max-width:1000px){main{grid-template-columns:1fr}}
 /* 8 cases identiques : 4 x 2, hauteur fixe */
 .grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
 @media(max-width:700px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
-.w{background:var(--panel);border:2px solid var(--line);border-radius:14px;padding:12px;cursor:pointer;user-select:none;height:auto;display:flex;flex-direction:column;gap:8px;position:relative;transition:border-color .15s}
+.w{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px;cursor:pointer;user-select:none;display:flex;flex-direction:column;gap:10px;position:relative;transition:border-color .15s}
 .w:hover{border-color:#47505d}
-.w.sel{border-color:var(--acc);box-shadow:0 0 0 1px var(--acc);background:#1f1d12}
+.w.sel{border-color:var(--acc);box-shadow:0 0 0 2px var(--acc)}
 .w.off .ph,.w.off .name{opacity:.45}
 .w .top{display:flex;align-items:center;gap:10px;min-width:0}
-.ph{width:48px;height:48px;border-radius:50%;flex:none;background:#2a313b center/cover;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:18px;color:var(--mut);position:relative}
+.ph{width:40px;height:40px;border-radius:50%;flex:none;background:#2a313b center/cover;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px;color:var(--mut);position:relative}
 .ph .num{position:absolute;bottom:-4px;right:-4px;background:#000;color:var(--acc);border-radius:6px;font-size:11px;padding:0 5px;line-height:16px}
 .w .who{min-width:0;flex:1}
-.w .name{font-weight:700;font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.w .meta{font-size:12px;display:flex;gap:8px;color:var(--mut)}
+.w .name{display:flex;align-items:center;gap:8px;font-weight:600;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sd{width:8px;height:8px;border-radius:50%;flex:none;background:var(--bad)}.sd.ok{background:var(--ok)}.sd.wait{background:var(--warn)}
+.w .meta{font-size:12px;display:flex;gap:8px;color:var(--mut);margin-top:2px;font-variant-numeric:tabular-nums}
 .w .edit{position:absolute;top:8px;right:8px;background:none;border:none;color:var(--mut);padding:4px;font-size:15px;opacity:0}
 .w:hover .edit{opacity:1}.w .edit:hover{color:var(--fg)}
-.w .last{aspect-ratio:1;width:100%;background:#000;border:3px solid #2b2b2e;border-radius:12px;display:flex;align-items:center;justify-content:center;color:#fff;overflow:hidden;container-type:size}
+.w .last{aspect-ratio:1;width:100%;background:#000;border:1px solid #23272e;border-radius:10px;display:flex;align-items:center;justify-content:center;color:#fff;overflow:hidden;container-type:size}
 /* mini écran : même grille 12 x 8 que la montre, mise à l'échelle de la case */
 .w .last .tgrid{--cw:min(7.4cqw,11cqh);--ch:min(10.5cqw,11.5cqh);--fs:min(9cqw,10cqh)}
 .w .last.empty{color:#333;font:bold 3em Arial,sans-serif}
-.w .lt{font-size:11px;color:var(--mut);display:flex;justify-content:space-between}
+.w .lt{font-size:11px;color:var(--mut);display:flex;justify-content:space-between;font-variant-numeric:tabular-nums}
 .st.ok{color:var(--ok)}.st.wait{color:var(--warn)}.st.no{color:var(--bad)}
 .bat.low{color:var(--bad);font-weight:700}
 .bar{display:flex;gap:8px;margin:14px 0 10px;flex-wrap:wrap}
 button{background:#2a313b;color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:8px 12px;font:inherit;cursor:pointer}
-button:hover{background:#343c48}button.primary{background:var(--acc);color:#111;border:none;font-weight:700;font-size:17px;padding:12px 22px}
+button:hover{background:#343c48}button.primary{background:var(--acc);color:#111;border:none;border-radius:10px;font-weight:700;font-size:17px;padding:12px 22px}
 button.primary:disabled{opacity:.4;cursor:default}button.danger{color:var(--bad)}
 .compose{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px}
 textarea{width:100%;background:#0b0d10;color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:12px;font:22px/1.3 system-ui,sans-serif;resize:none;height:90px}
@@ -44,7 +45,7 @@ textarea:focus,input:focus{outline:2px solid var(--acc)}
 .opt.dis{opacity:.4;cursor:default}
 .to{color:var(--mut);font-size:14px;margin-bottom:8px}.to b{color:var(--fg)}
 aside{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px;max-height:calc(100vh - 100px);overflow:auto;position:sticky;top:20px}
-aside h2{font-size:13px;margin:0 0 10px;color:var(--mut);text-transform:uppercase;letter-spacing:.05em}
+aside h2{font-size:13px;margin:0 0 10px;color:var(--mut);font-weight:600;text-transform:uppercase;letter-spacing:.05em}
 .h{border-bottom:1px solid var(--line);padding:8px 0;font-size:14px}.h .t{color:var(--mut);font-size:12px}
 .hint{color:var(--mut);font-size:12px;margin-top:8px}
 dialog{background:var(--panel);color:var(--fg);border:1px solid var(--line);border-radius:14px;padding:20px;width:340px}
@@ -64,20 +65,6 @@ body.setup .cfg{display:block}body.setup .compose{display:none}
 #setupBtn.on{background:var(--acc);color:#111;border:none}
 @keyframes nudge{0%,100%{transform:none}25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}
 .grid.nudge .w{animation:nudge .35s 2;border-color:var(--warn)}
-/* --- finition --- */
-body{font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif;-webkit-font-smoothing:antialiased}
-header{padding:14px 24px}header h1{font-weight:600;letter-spacing:-.01em}header a{text-decoration:none}header a:hover{color:var(--fg)}
-.w{border-width:1px;border-radius:12px;padding:14px;gap:10px}
-.w.sel{box-shadow:0 0 0 2px var(--acc);background:var(--panel)}
-.w .name{display:flex;align-items:center;gap:8px;font-weight:600;font-size:15px}
-.sd{width:8px;height:8px;border-radius:50%;flex:none;background:var(--bad)}.sd.ok{background:var(--ok)}.sd.wait{background:var(--warn)}
-.w .meta{font-size:12px;margin-top:2px;font-variant-numeric:tabular-nums}
-.ph{width:40px;height:40px;font-size:15px}
-.w .last{border:1px solid #23272e;border-radius:10px}
-.w .lt{font-size:11px;font-variant-numeric:tabular-nums}
-button{border-radius:8px}button.primary{border-radius:10px}
-.compose,aside,.cfg{border-radius:12px}
-aside h2{font-weight:600}
 </style></head><body>
 <header><span class="dot" id="conn"></span><h1>StageWatch · Dirigeant</h1><span class="sp"></span>
 <button id="setupBtn" title="Réglages des montres : Wi-Fi, luminosité, mise à jour">⚙ Réglages montres</button><span id="ips" class="hint" style="margin:0"></span><a href="/public" target="_blank">Page public ↗</a><a href="/sim" target="_blank">Simulateur ↗</a></header>
@@ -106,7 +93,7 @@ aside h2{font-weight:600}
   <div class="compose">
     <div class="to" id="to"></div>
     <textarea id="txt" placeholder="Message… (Entrée pour envoyer, Maj+Entrée = retour ligne)"></textarea>
-    <div class="row"><span class="cnt" id="cnt">0 / 96</span><span class="sp"></span>
+    <div class="row"><span class="cnt" id="cnt"></span><span class="sp"></span>
       <label class="opt" title="Le message apparaît en grand sur l'écran public, puis vole vers les cases des destinataires"><input type="checkbox" id="optAnim"> Animation public</label>
       <label class="opt" id="optRevealL" title="La montre reçoit le message seulement quand il atterrit sur l'écran public (~6 s après l'envoi)"><input type="checkbox" id="optReveal"> Révélation public <span class="hint" style="margin:0">(montre retardée)</span></label>
       <button class="primary" id="send" disabled>Envoyer</button></div>
@@ -169,9 +156,9 @@ function updateCompose() {
   const names = state.watches.filter(w => sel.has(w.id)).map(w => w.name);
   $('to').innerHTML = names.length === 0 ? 'Choisis un ou plusieurs destinataires ci-dessus'
     : names.length === state.watches.length ? 'À : <b>Tout le monde</b>' : 'À : <b>' + names.map(esc).join(', ') + '</b>';
-  const v = $('txt').value, n = [...v.trim()].length, fits = wrapGrid(v).ok && n <= GRID.max;
+  const v = $('txt').value, n = [...v.replace(/\s/g, '')].length, fits = wrapGrid(v).ok;  // espaces non comptés ; la vraie limite = tenir dans l'écran 12 x 8
   $('cnt').classList.toggle('over', !fits);
-  $('cnt').textContent = fits ? n + ' / ' + GRID.max : 'Trop long pour l\'écran (' + n + ' / ' + GRID.max + ')';
+  $('cnt').textContent = fits ? (n ? n + ' caractère' + (n > 1 ? 's' : '') : '') : 'Trop long pour l\'écran de la montre';
   $('send').disabled = !v.trim() || !fits;  // sans destinataire : le clic explique quoi faire
   $('send').textContent = names.length ? 'Envoyer' : 'Envoyer…';
 }

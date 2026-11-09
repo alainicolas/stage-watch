@@ -30,7 +30,7 @@ import (
 var webFS embed.FS
 
 const (
-	maxText      = 96
+	maxText      = 120 // garde-fou ; la vraie limite est l'écran 12 x 8 (vérifiée par l'admin)
 	pongWait     = 30 * time.Second
 	pingInterval = 10 * time.Second
 	writeWait    = 5 * time.Second
@@ -261,10 +261,23 @@ func (h *Hub) pushState() { h.broadcastViewers(h.stateLocked()) }
 // Durées de l'animation public (ms). Le serveur est l'horloge de référence :
 // il planifie chaque envoi dans une file, et la page public suit ce planning.
 const (
-	animNormal = 6000 // durée normale (révélation + vol + atterrissage)
-	animFast   = 3000 // durée accélérée quand des envois attendent dans la file
-	animGap    = 300  // petite pause entre deux animations
+	animFly  = 1800 // vol + atterrissage (fixe)
+	animGap  = 300  // petite pause entre deux animations
+	showBase = 2500 // révélation : base…
+	showWord = 450  // …+ par mot, pour que la salle ait le temps de lire
+	showMin  = 3500
+	showMax  = 12000
+	showFast = 0.6 // file en retard : révélation raccourcie (mais jamais sous showMin)
 )
+
+// Temps de révélation au centre selon la longueur du message
+func showTime(text string, late bool) int64 {
+	t := int64(showBase + showWord*len(strings.Fields(text)))
+	if late {
+		t = int64(float64(t) * showFast)
+	}
+	return max(showMin, min(showMax, t))
+}
 
 func (h *Hub) animate() bool { return h.cfg.Animate == nil || *h.cfg.Animate }
 
@@ -275,17 +288,15 @@ func (h *Hub) sendText(targets []int, text string) {
 	now := nowT.UnixMilli()
 
 	// Planification dans la file d'animation
-	delay, dur := int64(0), int64(0)
+	delay, dur, show := int64(0), int64(0), int64(0)
 	if h.animate() {
 		start := now
 		if h.animBusyUntil > now {
 			start = h.animBusyUntil
 		}
 		delay = start - now
-		dur = animNormal
-		if delay > 0 {
-			dur = animFast // déjà du retard : on accélère
-		}
+		show = showTime(text, delay > 0) // déjà du retard : révélation raccourcie
+		dur = show + animFly
 		h.animBusyUntil = start + dur + animGap
 	}
 	reveal := h.animate() && h.cfg.Reveal
@@ -319,7 +330,7 @@ func (h *Hub) sendText(targets []int, text string) {
 		return
 	}
 	h.broadcastViewers(map[string]any{"type": "send", "batch": map[string]any{
-		"id": batchID, "to": ids, "text": text, "delay": delay, "dur": dur, "reveal": reveal}})
+		"id": batchID, "to": ids, "text": text, "delay": delay, "dur": dur, "show": show, "reveal": reveal}})
 	if len(h.history) > 500 {
 		h.history = h.history[len(h.history)-500:]
 	}
@@ -937,6 +948,7 @@ func main() {
 			files.ServeHTTP(w, r)
 		}
 	}
+	mux.HandleFunc("/favicon.ico", func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusNoContent) })
 	mux.HandleFunc("/admin", page("admin"))
 	mux.HandleFunc("/public", page("public"))
 	mux.HandleFunc("/sim", page("sim"))

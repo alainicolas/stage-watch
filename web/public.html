@@ -6,34 +6,41 @@
 *{box-sizing:border-box}html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);font-family:system-ui,-apple-system,Segoe UI,sans-serif;overflow:hidden;cursor:none}
 /* 8 cases strictement identiques : 4 x 2 qui remplissent l'écran, quel que soit le contenu */
 #grid{display:grid;height:100vh;padding:2.5vh 2vw;gap:2vh 1.5vw;grid-template-columns:repeat(4,minmax(0,1fr));grid-template-rows:repeat(2,minmax(0,1fr));transition:filter .6s,transform .6s,opacity .6s}
-#grid.dim{filter:blur(6px) brightness(.35);transform:scale(.96)}
+#grid.dim{filter:blur(6px) brightness(.2);transform:scale(.96)}
 .c{background:var(--card);border:3px solid var(--line);border-radius:2vh;padding:2vh 1.2vw;display:flex;flex-direction:column;gap:1.5vh;min-height:0;min-width:0;overflow:hidden;transition:border-color .5s,background .5s,box-shadow .5s}
 .c .hd{display:flex;align-items:center;gap:1vw;min-width:0;flex:none}
-.ph{border-radius:50%;flex:none;background:#222 center/cover;display:flex;align-items:center;justify-content:center;font-weight:800;color:#777}
+.ph{border-radius:50%;flex:none;background:#2e2f35 center/cover;display:flex;align-items:center;justify-content:center;font-weight:800;color:#cfd3d9}
 .c .ph{width:9vh;height:9vh;font-size:3.6vh}
-.c .n{font-size:3.2vh;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#d6d9de}
+.c .n{font-size:4.2vh;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#d6d9de}
 .c .m{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;overflow:hidden}
 .c{--mc:var(--acc)}
-.c.tinted{border-color:color-mix(in srgb,var(--mc) 60%,#232327)}
-.c.fresh{border-color:var(--mc);background:color-mix(in srgb,var(--mc) 10%,#000);box-shadow:0 0 4vh color-mix(in srgb,var(--mc) 25%,transparent)}
+/* 3 états bien distincts : frais (couleur pleine) > teinté (contour) > ancien (atténué) */
+.c .n,.c .ph{transition:opacity .5s,color .5s,box-shadow .5s}
+.c:not(.fresh):not(.tinted) .n{opacity:.6}
+.c.tinted{border-color:color-mix(in srgb,var(--mc) 55%,#232327)}
+.c.fresh{border-width:5px;border-color:var(--mc);background:color-mix(in srgb,var(--mc) 24%,#000);box-shadow:0 0 6vh color-mix(in srgb,var(--mc) 40%,transparent)}
 .c.fresh .n{color:var(--mc)}
-.c.land{animation:shake .5s ease-out}
-@keyframes shake{0%,100%{transform:translate(0)}15%{transform:translate(-1.2vh,.3vh) rotate(-.6deg)}30%{transform:translate(1.2vh,-.3vh) rotate(.6deg)}45%{transform:translate(-.8vh,.2vh)}60%{transform:translate(.8vh,-.2vh)}80%{transform:translate(-.3vh,0)}}
+.c.fresh .ph{box-shadow:0 0 0 .6vh var(--mc)}
+/* montre hors ligne : case masquée (les autres gardent leur place) */
+.c.gone{visibility:hidden}
+.c.land{animation:pulse .45s cubic-bezier(.3,1.2,.5,1)}
+@keyframes pulse{0%{transform:scale(1)}40%{transform:scale(1.04)}100%{transform:scale(1)}}
 
 /* ===== Scène de révélation ===== */
 #stage{--mc:var(--acc);position:fixed;inset:0;pointer-events:none;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4vh;visibility:hidden}
 #stage.on{visibility:visible}
 #who{display:flex;gap:calc(var(--wph)*.25);justify-content:center;flex-wrap:nowrap;max-width:96vw}
 #who .p{display:flex;flex-direction:column;align-items:center;gap:1.2vh;opacity:0;transform:translateY(-4vh) scale(.5)}
-#who .p.in{animation:popin .55s cubic-bezier(.3,1.6,.5,1) forwards}
+#who .p.in{animation:popin .5s cubic-bezier(.3,1.2,.5,1) forwards}
 @keyframes popin{to{opacity:1;transform:none}}
 #who .ph{width:var(--wph);height:var(--wph);font-size:calc(var(--wph)*.4);border:.5vh solid var(--mc);box-shadow:0 0 3vh color-mix(in srgb,var(--mc) 33%,transparent)}
 #who .pn{font-size:calc(var(--wph)*.26);font-weight:800;color:var(--mc);white-space:nowrap;max-width:calc(var(--wph)*2.2);overflow:hidden;text-overflow:ellipsis}
-#big{background:#000;border:1.2vh solid #2b2b2e;border-radius:4vh;box-shadow:0 0 8vh color-mix(in srgb,var(--mc) 19%,transparent),0 0 0 .4vh var(--mc);display:flex;align-items:center;justify-content:center;opacity:0;transform:scale(.3)}
-#big.in{animation:bigin .6s cubic-bezier(.2,1.3,.4,1) forwards}
+#big{background:#000;border:.8vh solid var(--mc);border-radius:4vh;box-shadow:0 0 8vh color-mix(in srgb,var(--mc) 19%,transparent),0 0 0 .4vh var(--mc);display:flex;align-items:center;justify-content:center;opacity:0;transform:scale(.3)}
+#big.in{animation:bigin .55s cubic-bezier(.2,1.15,.4,1) forwards}
 @keyframes bigin{to{opacity:1;transform:none}}
 .fly{position:fixed;z-index:10;transform-origin:0 0;background:#000;border:.6vh solid var(--mc);border-radius:2vh;display:flex;align-items:center;justify-content:center;overflow:hidden;pointer-events:none;will-change:transform,opacity}
 #off{position:fixed;bottom:1vh;right:1vw;color:#f2555a;font-size:14px;display:none}
+@media (prefers-reduced-motion:reduce){.c.land,#who .p.in,#big.in{animation-duration:.01s}}
 </style></head><body>
 <div id="grid"></div>
 <div id="stage"><div id="who"></div><div id="big"><div class="tgrid" id="bigGrid"></div></div></div>
@@ -79,6 +86,7 @@ function render() {
     if (!holding[w.id]) setCellText(w.id, w.last ? w.last.text : '');
     if (!w.last && !holding[w.id]) { delete fresh[w.id]; c.classList.remove('tinted') }  // écran effacé : plus de couleur
     c.classList.toggle('fresh', Date.now() - (fresh[w.id] || 0) < FRESH_MS);
+    c.classList.toggle('gone', !w.online);
   }
   sizeGrids();
 }
@@ -137,9 +145,10 @@ function layoutRect(el) {
 async function play(b, startAt) {
   await wait(startAt - Date.now());
   const T = b.dur, t0 = Date.now();
-  // Découpage du temps : révélation ~70 %, vol ~20 %, atterrissage ~10 %
-  const tFly = T * 0.70, tFlyDur = T * 0.20;
-  const ids = b.to.filter(id => cell(id));
+  // Révélation : durée donnée par le serveur selon le nombre de mots ; puis vol (1,2 s) et atterrissage
+  const tFly = b.show || T * 0.70, tFlyDur = 1200;
+  const ids = b.to.filter(id => cell(id) && !cell(id).classList.contains('gone'));
+  b.to.filter(id => !ids.includes(id)).forEach(id => { holding[id] = Math.max(0, (holding[id] || 1) - 1) });  // hors ligne : pas de vol
   const stage = $('stage'), who = $('who'), big = $('big');
   stage.style.setProperty('--mc', b.color);
 
@@ -169,10 +178,10 @@ async function play(b, startAt) {
   // --- 2. Vol : une copie du grand écran part vers chaque case ---
   await wait(t0 + tFly - Date.now());
   const from = big.getBoundingClientRect(), fromGrid = $('bigGrid').getBoundingClientRect();
-  $('grid').classList.remove('dim');
   stage.classList.remove('on');
+  setTimeout(() => $('grid').classList.remove('dim'), 150);  // la grille revient juste après le départ des copies
   const kCell = cellMetrics();
-  const flights = ids.map(id => {
+  const flights = ids.map((id, i) => {
     // cible = la grille de texte de la case : les lettres se posent exactement sur celles de la case
     const target = layoutRect(cell(id).querySelector('.tgrid'));
     const f = document.createElement('div'); f.className = 'fly'; f.style.setProperty('--mc', b.color);
@@ -188,9 +197,10 @@ async function play(b, startAt) {
     const dx = target.left - from.left - (fg.left - from.left) * s;
     const dy = target.top - from.top - (fg.top - from.top) * s;
     return f.animate([
-      { transform: 'translate(0,0) scale(1)', borderColor: b.color },
-      { transform: `translate(${dx}px,${dy}px) scale(${s})`, borderColor: 'transparent', offset: 1 }
-    ], { duration: tFlyDur, easing: 'cubic-bezier(.55,0,.35,1)', fill: 'forwards' }).finished.then(() => {
+      { transform: 'translate(0,0) scale(1)', borderColor: b.color, opacity: 1 },
+      { opacity: .85, offset: .5 },
+      { transform: `translate(${dx}px,${dy}px) scale(${s})`, borderColor: 'transparent', opacity: 1, offset: 1 }
+    ], { duration: tFlyDur, delay: i * 60, easing: 'cubic-bezier(.55,0,.35,1)', fill: 'forwards' }).finished.then(() => {
       f.remove();
       holding[id] = Math.max(0, (holding[id] || 1) - 1);
       land(id, b.text, b.color);
