@@ -26,8 +26,8 @@ Logs pour diagnostiquer (câble branché) : `pio run -e twatch-debug -t upload &
 ## Utilisation de la couronne
 | Geste | Effet |
 |---|---|
-| appui court | écran éteint : le rallume. Sinon : écran d’info 5 s (numéro, Wi-Fi, serveur, batterie, version) |
-| appui long (~1,5 s) | menu « Numéro de montre » : appuis courts = 1→8, appui long = valider |
+| appui court | écran éteint : le rallume. Sinon : écran d’info 5 s (numéro, Wi-Fi, serveur, batterie, version) ; un 2e appui court revient tout de suite à l’accueil |
+| appui long (~1,5 s) | menu « Numéro de montre » : appuis courts = 1→8, appui long = valider. Sans appui pendant 8 s : on quitte sans rien changer |
 | appui 6 s | extinction (rallumer : 2 s) |
 
 ## À l'écran

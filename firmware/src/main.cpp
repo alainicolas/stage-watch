@@ -50,6 +50,8 @@ bool screenOff = false;
 bool batCalOk = false;
 bool menuMode = false;
 int menuId = 1;
+uint32_t menuAt = 0;        // dernier appui dans le menu (sortie auto sans enregistrer)
+#define MENU_TIMEOUT_MS 8000
 volatile bool pmuIrq = false;
 bool hasDrv = false;
 uint8_t curBright = 0;
@@ -470,6 +472,7 @@ void handleButton() {
   screenWake();
   setBrightness(BRIGHT_FULL); msgAt = millis();
   if (menuMode) {
+    menuAt = millis();
     if (shortP) { menuId = menuId % 8 + 1; buzzShort(); }
     if (longP) {
       menuMode = false;
@@ -481,8 +484,8 @@ void handleButton() {
       buzzMessage();
     }
   } else {
-    if (longP) { menuMode = true; menuId = watchId; buzzShort(); }
-    else if (shortP) { infoUntil = millis() + 5000; }
+    if (longP) { menuMode = true; menuId = watchId; menuAt = millis(); infoUntil = 0; buzzShort(); }
+    else if (shortP) { infoUntil = (infoUntil && millis() < infoUntil) ? 0 : millis() + 5000; }  // 2e appui = retour accueil
   }
   render();
 }
@@ -546,6 +549,8 @@ void loop() {
   if (!screenOff && !menuMode && msgAt && now - msgAt > FULL_MS) setBrightness(curText.isEmpty() ? BRIGHT_IDLE : BRIGHT_DIM);
   // Rafraîchit la barre (batterie, état) et la sortie de l'écran info
   if (!screenOff && now - lastDraw > 15000) render();
+  // Menu numéro : sans appui pendant MENU_TIMEOUT_MS, on quitte sans rien changer
+  if (menuMode && now - menuAt > MENU_TIMEOUT_MS) { menuMode = false; render(); }
   if (infoUntil && now > infoUntil) { infoUntil = 0; if (!screenOff) render(); }
   delay(5);
 }
