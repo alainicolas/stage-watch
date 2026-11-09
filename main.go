@@ -393,6 +393,12 @@ func (h *Hub) watchHello(c *client, id, battery int, sim bool, m inMsg) {
 		h.logf("ATTENTION : deux montres annoncent l'ID %d, la plus récente remplace l'ancienne", id)
 		w.conn.conn.Close()
 	}
+	// La montre a changé de numéro (menu) sur la même connexion : on libère l'ancienne case
+	if old, ok := h.watches[c.id]; ok && c.id != id && old.conn == c {
+		old.conn = nil
+		old.Online = false
+		h.logf("CHANGEMENT de numéro : montre %d devient %d", c.id, id)
+	}
 	c.id = id
 	w.conn = c
 	w.Online = true
