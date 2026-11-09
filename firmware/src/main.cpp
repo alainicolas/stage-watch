@@ -270,9 +270,9 @@ void drawInfo() {
   if (!batCalOk) bat += " !";
   row("Batterie", bat, C_TXT);
   row("Version", FW_VERSION, C_MUT);
-  // Logo centré sous la version (y = 180 .. 236)
+  // Logo centré sous la version, décollé du bas de l écran
   frame.setSwapBytes(true);   // LOGO est en RGB565 standard
-  frame.pushImage((W - LOGO_W) / 2, H - LOGO_H - 4, LOGO_W, LOGO_H, LOGO);
+  frame.pushImage((W - LOGO_W) / 2, H - LOGO_H - 16, LOGO_W, LOGO_H, LOGO);
   frame.setSwapBytes(false);
 }
 

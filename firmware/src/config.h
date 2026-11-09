@@ -25,7 +25,7 @@
 #define BUZZ_ON_MS       400
 #define BUZZ_OFF_MS      180
 #define BUZZ_POWER       50      // intensité en % (100 = max ; plus bas = moins de bruit de résonance du boîtier)
-#define FW_VERSION       "0.2.3"
+#define FW_VERSION       "0.2.4"
 
 // ======= Broches T-Watch S3 (source : LilyGO src/utilities.h) =======
 #define PIN_I2C_SDA   10
