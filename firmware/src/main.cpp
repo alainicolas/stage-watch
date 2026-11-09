@@ -117,7 +117,7 @@ void initPower() {
   pmu.disableALDO4();         // LoRa coupée : économie de batterie
   pmu.enableBLDO2();
   pmu.setPowerKeyPressOffTime(XPOWERS_POWEROFF_6S);
-  pmu.setPowerKeyPressOnTime(XPOWERS_POWERON_128MS);
+  pmu.setPowerKeyPressOnTime(XPOWERS_POWERON_1S);   // 1 s pour allumer : pas d'allumage accidentel dans un sac
   pmu.disableTSPinMeasure();
   pmu.enableBattDetection(); pmu.enableVbusVoltageMeasure(); pmu.enableBattVoltageMeasure(); pmu.enableSystemVoltageMeasure();
   pmu.setChargingLedMode(XPOWERS_CHG_LED_OFF);
