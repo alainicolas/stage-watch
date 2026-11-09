@@ -9,11 +9,13 @@ Envoyer des messages courts à des participants sur scène (montres LilyGO T-Wat
 Double-clic sur `StageWatch-mac-arm64` (Mac M1/M2/M3…), `StageWatch-mac-intel` ou `StageWatch.exe` (Windows).
 Le navigateur s'ouvre sur l'interface du dirigeant.
 
+Le port est **47800** (ou le suivant libre, jusqu’à 47809, s’il est déjà pris : l’adresse exacte s’affiche au lancement). Forcer un port : `-port 9000`.
+
 | Page | Rôle |
 |---|---|
-| `http://localhost:8080/admin` | Dirigeant : choisir les destinataires, envoyer, voir l'état des montres |
-| `http://localhost:8080/public` | Écran de la salle (double-clic = plein écran) |
-| `http://localhost:8080/sim` | Simulateur de montres, pour tester sans matériel |
+| `http://localhost:47800/admin` | Dirigeant : choisir les destinataires, envoyer, voir l'état des montres |
+| `http://localhost:47800/public` | Écran de la salle (double-clic = plein écran) |
+| `http://localhost:47800/sim` | Simulateur de montres, pour tester sans matériel |
 
 Premier lancement : macOS → clic droit › Ouvrir (app non signée). Windows → « Informations complémentaires › Exécuter quand même ». Autoriser l'accès réseau quand le pare-feu le demande.
 

@@ -670,7 +670,7 @@ func announce(port int) {
 
 func main() {
 	log.SetFlags(0)
-	port := flag.Int("port", 8080, "port HTTP/WebSocket")
+	port := flag.Int("port", 0, "port HTTP/WebSocket (par défaut : 47800, ou le suivant libre)")
 	noBrowser := flag.Bool("no-browser", false, "ne pas ouvrir le navigateur")
 	flag.Parse()
 
@@ -707,10 +707,30 @@ func main() {
 		files.ServeHTTP(w, r)
 	})
 
-	addr := fmt.Sprintf(":%d", *port)
-	ln, err := net.Listen("tcp", addr)
+	// Port : celui demandé, sinon 47800 ou le premier libre jusqu'à 47809.
+	// On teste aussi 127.0.0.1 : une autre app peut n'écouter que là, et masquer StageWatch dans le navigateur.
+	var ln net.Listener
+	var err error
+	tryPort := func(p int) (net.Listener, error) {
+		if probe, e := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", p)); e != nil {
+			return nil, e
+		} else {
+			probe.Close()
+		}
+		return net.Listen("tcp", fmt.Sprintf(":%d", p))
+	}
+	if *port != 0 {
+		ln, err = tryPort(*port)
+	} else {
+		for p := 47800; p < 47810; p++ {
+			if ln, err = tryPort(p); err == nil {
+				*port = p
+				break
+			}
+		}
+	}
 	if err != nil {
-		fmt.Printf("\nImpossible d'ouvrir le port %d (StageWatch est peut-être déjà lancé ?)\n%v\n\nAppuie sur Entrée pour fermer.", *port, err)
+		fmt.Printf("\nImpossible d'ouvrir le port %d (StageWatch est peut-être déjà lancé, ou le port est utilisé par une autre app)\n%v\n\nAppuie sur Entrée pour fermer.", *port, err)
 		fmt.Scanln()
 		os.Exit(1)
 	}

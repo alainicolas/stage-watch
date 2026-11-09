@@ -22,8 +22,8 @@ Commande en cours : 9–10 × LilyGO T-Watch S3 (+ routeur de voyage GL.iNet, c�
   ⚠️ Aujourd'hui, le Wi-Fi est inscrit dans le firmware : changer de réseau = reflasher les montres. Voir l'idée « plusieurs Wi-Fi » en section 5.
 
 ## 2. Première montre (une soirée)
-- [ ] Brancher la montre, puis `cd firmware && ~/.pio-venv/bin/pio run -e twatch -t upload`.
-      Si ça ne marche pas : maintenir la couronne ~1 s pour l'allumer. Si elle redémarre en boucle, utiliser le bouton BOOT interne (voir `firmware/README.md`).
+- [x] Brancher la montre, puis `cd firmware && ~/.pio-venv/bin/pio run -e twatch -t upload`.
+      ✅ Fait sur la montre 1 : flash OK **sans ouvrir la montre** (elle doit juste être allumée et réveillée). Connexion au serveur et 1er message ✓ reçu.
 - [ ] Si l'écran reste noir ou affiche n'importe quoi : passer en `twatch-debug` et lire les logs avec `pio device monitor`.
 - [ ] **Vérifications et réglages** (tout est dans `firmware/src/main.cpp` / `config.h`) :
   - [ ] Orientation du texte : `tft.setRotation(2)` → essayer 0 à 3.

@@ -10,7 +10,7 @@
 // Le serveur est trouvé automatiquement (annonce UDP du laptop).
 // Si la découverte échoue, on essaie cette adresse (laisser "" pour désactiver).
 #define SERVER_FALLBACK_HOST ""
-#define SERVER_PORT          8080
+#define SERVER_PORT          47800   // utilisé seulement avec SERVER_FALLBACK_HOST ; sinon le port vient de l'annonce du serveur
 #define DISCOVERY_PORT       47808
 
 // ======= Comportement =======
@@ -19,7 +19,7 @@
 #define BRIGHT_IDLE      25      // luminosité sans message
 #define FULL_MS          30000   // durée en pleine luminosité après un message
 #define HEARTBEAT_MS     10000
-#define FW_VERSION       "0.1.0"
+#define FW_VERSION       "0.1.1"
 
 // ======= Broches T-Watch S3 (source : LilyGO src/utilities.h) =======
 #define PIN_I2C_SDA   10

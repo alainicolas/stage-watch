@@ -5,7 +5,7 @@
 //   - appui court  : affiche l'écran d'info (ID, Wi-Fi, serveur, batterie) quelques secondes
 //   - appui long   : (1,5 s environ, géré par l'AXP2101) entre dans le menu ID ; chaque appui court
 //                    fait défiler 1..8, un nouvel appui long valide et enregistre.
-//   - appui 4 s+   : extinction (matériel)
+//   - appui 6 s     : extinction (matériel, valeur LilyGO)
 #include <Arduino.h>
 #include <vector>
 #include <Wire.h>
@@ -38,6 +38,7 @@ Preferences prefs;
 // ---------- État ----------
 int watchId = 1;
 String serverHost = "";
+uint16_t serverPort = SERVER_PORT;
 bool wsStarted = false, wsConnected = false;
 String curText = "";
 uint32_t msgAt = 0, lastBeat = 0, lastDraw = 0, infoUntil = 0;
@@ -80,7 +81,7 @@ void initPower() {
   pmu.enableALDO1(); pmu.enableALDO2(); pmu.enableALDO3();
   pmu.disableALDO4();         // LoRa coupée : économie de batterie
   pmu.enableBLDO2();
-  pmu.setPowerKeyPressOffTime(XPOWERS_POWEROFF_4S);
+  pmu.setPowerKeyPressOffTime(XPOWERS_POWEROFF_6S);
   pmu.setPowerKeyPressOnTime(XPOWERS_POWERON_128MS);
   pmu.disableTSPinMeasure();
   pmu.enableBattDetection(); pmu.enableVbusVoltageMeasure(); pmu.enableBattVoltageMeasure(); pmu.enableSystemVoltageMeasure();
@@ -205,7 +206,7 @@ void drawInfo() {
   };
   row("Montre", String(watchId), C_ACC);
   row("Wi-Fi", WiFi.isConnected() ? WiFi.localIP().toString() : String("..."), WiFi.isConnected() ? C_OK : C_BAD);
-  row("Serveur", wsConnected ? serverHost : (serverHost.isEmpty() ? String("recherche") : serverHost + " ..."), wsConnected ? C_OK : C_BAD);
+  row("Serveur", wsConnected ? serverHost + ":" + String(serverPort) : (serverHost.isEmpty() ? String("recherche") : serverHost + " ..."), wsConnected ? C_OK : C_BAD);
   int b = batteryPercent();
   row("Batterie", b >= 0 ? String(b) + "%" + (pmu.isCharging() ? " +" : "") : String("?"), C_TXT);
   row("Version", FW_VERSION, C_MUT);
@@ -276,7 +277,7 @@ void onWs(WStype_t type, uint8_t* payload, size_t len) {
 }
 
 void startWs() {
-  ws.begin(serverHost.c_str(), SERVER_PORT, "/ws?role=watch");
+  ws.begin(serverHost.c_str(), serverPort, "/ws?role=watch");
   ws.onEvent(onWs);
   ws.setReconnectInterval(1500);
   ws.enableHeartbeat(10000, 4000, 2);  // détecte un lien mort en ~20 s
@@ -290,9 +291,12 @@ void discover() {
   char buf[64]; int r = udp.read(buf, sizeof(buf) - 1); buf[r < 0 ? 0 : r] = 0;
   if (strncmp(buf, "STAGEWATCH", 10)) return;
   String ip = udp.remoteIP().toString();
-  if (ip != serverHost) {
-    LOG("Serveur trouvé : %s\n", ip.c_str());
+  int p = atoi(buf + 10);  // "STAGEWATCH <port>"
+  uint16_t port = (p > 0 && p < 65536) ? p : SERVER_PORT;
+  if (ip != serverHost || port != serverPort) {
+    LOG("Serveur trouvé : %s:%u\n", ip.c_str(), port);
     serverHost = ip;
+    serverPort = port;
     if (wsStarted) ws.disconnect();
     startWs();
     render();
