@@ -18,8 +18,9 @@
 #define BRIGHT_DIM       60      // luminosité après FULL_MS (texte toujours lisible)
 #define BRIGHT_IDLE      25      // luminosité sans message
 #define FULL_MS          30000   // durée en pleine luminosité après un message
+#define SCREEN_OFF_MS    120000  // écran éteint après 2 min sans message ni appui (réveil : message ou couronne)
 #define HEARTBEAT_MS     10000
-#define FW_VERSION       "0.1.1"
+#define FW_VERSION       "0.1.3"
 
 // ======= Broches T-Watch S3 (source : LilyGO src/utilities.h) =======
 #define PIN_I2C_SDA   10

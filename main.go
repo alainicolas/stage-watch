@@ -49,15 +49,20 @@ type Message struct {
 }
 
 type Watch struct {
-	ID       int      `json:"id"`
-	Name     string   `json:"name"`
-	Online   bool     `json:"online"`
-	Battery  int      `json:"battery"` // -1 inconnu
-	LastSeen int64    `json:"lastSeen"`
-	Last     *Message `json:"last"`
-	Sim      bool     `json:"sim"`
-	Photo    string   `json:"photo"`
-	conn     *client
+	ID         int    `json:"id"`
+	Name       string `json:"name"`
+	Online     bool   `json:"online"`
+	Battery    int    `json:"battery"` // -1 inconnu
+	MilliV     int    `json:"mv"`      // tension batterie (mV), 0 = inconnue
+	USB        bool   `json:"usb"`     // câble branché
+	Charging   bool   `json:"chg"`     // en charge
+	FW         string `json:"fw"`      // version du firmware
+	lastBatLog int64
+	LastSeen   int64    `json:"lastSeen"`
+	Last       *Message `json:"last"`
+	Sim        bool     `json:"sim"`
+	Photo      string   `json:"photo"`
+	conn       *client
 }
 
 type Config struct {
@@ -363,7 +368,17 @@ func (h *Hub) clearWatches(targets []int) {
 	h.pushState()
 }
 
-func (h *Hub) watchHello(c *client, id, battery int, sim bool) {
+// à appeler avec h.mu verrouillé. Journal batterie toutes les 5 min (pour mesurer l'autonomie).
+func (h *Hub) setPower(w *Watch, m inMsg, battery int) {
+	w.Battery, w.MilliV, w.USB, w.Charging = battery, m.MV, m.USB, m.Chg
+	if now := time.Now().UnixMilli(); !w.Sim && m.MV > 0 && now-w.lastBatLog >= 5*60*1000 {
+		w.lastBatLog = now
+		h.logf("BATTERIE montre %d : %d%% %.2fV%s", w.ID, battery, float64(m.MV)/1000,
+			map[bool]string{true: " (USB branché)", false: " (sur batterie)"}[m.USB])
+	}
+}
+
+func (h *Hub) watchHello(c *client, id, battery int, sim bool, m inMsg) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	w := h.watches[id]
@@ -376,9 +391,12 @@ func (h *Hub) watchHello(c *client, id, battery int, sim bool) {
 	w.conn = c
 	w.Online = true
 	w.Sim = sim
-	w.Battery = battery
+	w.FW = m.FW
+	w.lastBatLog = 0
+	h.setPower(w, m, battery)
 	w.LastSeen = time.Now().UnixMilli()
-	h.logf("CONNEXION montre %d (%s)%s", id, w.Name, map[bool]string{true: " [simulateur]", false: ""}[sim])
+	h.logf("CONNEXION montre %d (%s)%s%s", id, w.Name, map[bool]string{true: " [simulateur]", false: ""}[sim],
+		map[bool]string{true: " firmware " + m.FW, false: ""}[m.FW != ""])
 	// Re-livre le dernier message s'il n'a pas été confirmé
 	if w.Last != nil && !w.Last.Acked && !w.Last.Pending {
 		c.push(enc(map[string]any{"type": "msg", "msgId": w.Last.MsgID, "text": w.Last.Text}))
@@ -421,11 +439,11 @@ func (h *Hub) watchAck(c *client, msgID int64) {
 	h.pushState()
 }
 
-func (h *Hub) watchBeat(c *client, battery int) {
+func (h *Hub) watchBeat(c *client, battery int, m inMsg) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	if w, ok := h.watches[c.id]; ok && w.conn == c {
-		w.Battery = battery
+		h.setPower(w, m, battery)
 		w.LastSeen = time.Now().UnixMilli()
 		h.pushState()
 	}
@@ -444,6 +462,10 @@ type inMsg struct {
 	Battery *int            `json:"battery"`
 	MsgID   int64           `json:"msgId"`
 	Sim     bool            `json:"sim"`
+	MV      int             `json:"mv"`
+	USB     bool            `json:"usb"`
+	Chg     bool            `json:"chg"`
+	FW      string          `json:"fw"`
 	Targets json.RawMessage `json:"targets"`
 	Text    string          `json:"text"`
 	Name    string          `json:"name"`
@@ -546,10 +568,10 @@ func (h *Hub) handle(c *client, m inMsg) {
 		switch m.Type {
 		case "hello":
 			if m.ID >= 1 && m.ID <= maxWatches {
-				h.watchHello(c, m.ID, bat, m.Sim)
+				h.watchHello(c, m.ID, bat, m.Sim, m)
 			}
 		case "hb":
-			h.watchBeat(c, bat)
+			h.watchBeat(c, bat, m)
 		case "ack":
 			h.watchAck(c, m.MsgID)
 		}
@@ -638,28 +660,31 @@ func dataDir() string {
 }
 
 // Annonce UDP en broadcast : les montres découvrent le laptop sans IP fixe.
+// L'annonce part de l'adresse de chaque interface vers SON adresse de broadcast (ex. 192.168.0.255) :
+// elle sort ainsi sur le bon réseau même quand un VPN capte la route par défaut.
 func announce(port int) {
 	msg := []byte(fmt.Sprintf("STAGEWATCH %d", port))
 	for {
-		targets := []string{"255.255.255.255"}
 		ifaces, _ := net.Interfaces()
 		for _, i := range ifaces {
-			if i.Flags&net.FlagUp == 0 || i.Flags&net.FlagLoopback != 0 {
-				continue
+			if i.Flags&net.FlagUp == 0 || i.Flags&net.FlagLoopback != 0 || i.Flags&net.FlagBroadcast == 0 {
+				continue // les VPN (utun) n'ont pas de broadcast : ignorés
 			}
 			addrs, _ := i.Addrs()
 			for _, a := range addrs {
-				if ipn, ok := a.(*net.IPNet); ok && ipn.IP.To4() != nil {
-					b := make(net.IP, 4)
-					for k := 0; k < 4; k++ {
-						b[k] = ipn.IP.To4()[k] | ^ipn.Mask[len(ipn.Mask)-4+k]
-					}
-					targets = append(targets, b.String())
+				ipn, ok := a.(*net.IPNet)
+				if !ok || ipn.IP.To4() == nil {
+					continue
 				}
-			}
-		}
-		for _, t := range targets {
-			if c, err := net.Dial("udp4", t+":47808"); err == nil {
+				ip4, mask := ipn.IP.To4(), ipn.Mask[len(ipn.Mask)-4:]
+				bcast := make(net.IP, 4)
+				for k := 0; k < 4; k++ {
+					bcast[k] = ip4[k] | ^mask[k]
+				}
+				c, err := net.DialUDP("udp4", &net.UDPAddr{IP: ip4}, &net.UDPAddr{IP: bcast, Port: 47808})
+				if err != nil {
+					continue
+				}
 				c.Write(msg)
 				c.Close()
 			}

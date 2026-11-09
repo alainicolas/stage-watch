@@ -26,14 +26,14 @@ Logs pour diagnostiquer (câble branché) : `pio run -e twatch-debug -t upload &
 ## Utilisation de la couronne
 | Geste | Effet |
 |---|---|
-| appui court | écran d'info 5 s (numéro, Wi-Fi, serveur, batterie, version) |
+| appui court | écran éteint : le rallume. Sinon : écran d’info 5 s (numéro, Wi-Fi, serveur, batterie, version) |
 | appui long (~1,5 s) | menu « Numéro de montre » : appuis courts = 1→8, appui long = valider |
 | appui 6 s | extinction (rallumer : 2 s) |
 
 ## À l'écran
 - Au repos : le numéro de la montre en gris. En haut : numéro, pastille verte/rouge (serveur), batterie.
 - Message : **2 vibrations**, puis le texte dans la plus grande police qui tient (accents OK).
-  Pleine luminosité 30 s, puis luminosité réduite ; le texte reste affiché jusqu'au suivant ou « Effacer ».
+  Pleine luminosité 30 s, puis réduite. **Écran éteint après 2 min** sans message ni appui (économie de batterie) : il se rallume à l’arrivée d’un message ou avec la couronne, sur le dernier message.
 
 ## À valider sur la vraie montre
 Orientation de l'écran (`setRotation`), force/forme de la vibration (`buzzMessage`), lisibilité, autonomie.

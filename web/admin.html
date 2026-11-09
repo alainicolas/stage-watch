@@ -112,7 +112,7 @@ function render() {
       <div class="top">
         <div class="ph" ${phStyle(w)}>${w.photo ? '' : esc(initials(w.name))}<span class="num">${w.id}</span></div>
         <div class="who"><div class="name">${esc(w.name)}</div>
-          <div class="meta">${status(w)}<span class="bat ${w.battery >= 0 && w.battery < 20 ? 'low' : ''}">${w.battery >= 0 ? '🔋' + w.battery + '%' : ''}</span>${w.sim ? '<span>sim</span>' : ''}</div></div>
+          <div class="meta">${status(w)}<span class="bat ${w.battery >= 0 && w.battery < 20 ? 'low' : ''}" title="${w.mv ? (w.mv / 1000).toFixed(2) + ' V' : ''}${w.fw ? ' · firmware ' + esc(w.fw) : ''}">${w.battery >= 0 ? (w.usb ? '🔌' : '🔋') + w.battery + '%' : ''}${w.mv ? ' · ' + (w.mv / 1000).toFixed(2) + 'V' : ''}</span>${w.sim ? '<span>sim</span>' : ''}</div></div>
       </div>
       <div class="last ${w.last ? '' : 'empty'}">${w.last ? `<div class="tgrid" data-txt="${esc(w.last.text)}"></div>` : w.id}</div>
       <div class="lt">${w.last ? `<span>${hhmm(w.last.time)}</span><span>${w.last.acked ? '<span class="st ok">✓ reçu</span>' : w.last.pending ? '<span class="st wait">⏳ révélation</span>' : '<span class="st wait">… envoi</span>'}</span>` : '&nbsp;'}</div>

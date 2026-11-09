@@ -36,6 +36,12 @@ Commande en cours : 9–10 × LilyGO T-Watch S3 (+ routeur de voyage GL.iNet, c�
 - [ ] Laptop **sur le routeur** : la montre passe au vert dans l'admin. Envoyer un message et vérifier vibration → affichage → ✓ reçu.
 - [ ] Tester la coupure : éteindre le routeur 30 s puis le rallumer → la montre doit se reconnecter seule.
 
+### Leçons de la 1re montre
+- **Pas de VPN** sur le laptop pendant un spectacle : il coupe le réseau local, et les montres ne voient plus le serveur. Si un VPN est indispensable, il doit autoriser l'accès au réseau local.
+- La montre doit être **réveillée** pour être flashée (sinon « No serial data received »). Pas besoin d'ouvrir la montre.
+- Port du serveur : **47800** (ou le suivant libre). Les montres le trouvent toutes seules.
+- Batterie : la jauge est calibrée au 1er démarrage (profil officiel LilyGO 470 mAh). L'écran d'info affiche aussi la **tension**, plus fiable : environ 4,2 V pleine, 3,7 V à mi-charge, 3,3 V presque vide.
+
 ## 3. Toutes les montres
 - [ ] Flasher les autres et leur donner un numéro de 1 à 8 avec la couronne. Les 1–2 restantes servent de rechange.
 - [ ] Coller une étiquette avec le numéro au dos de chaque montre.
@@ -43,7 +49,7 @@ Commande en cours : 9–10 × LilyGO T-Watch S3 (+ routeur de voyage GL.iNet, c�
 
 ## 4. Répétition générale
 - [ ] Les 8 montres en même temps pendant 2–3 h, avec des messages réguliers.
-- [ ] Mesurer l'**autonomie** et noter le % de batterie dans l'admin toutes les 30 min.
+- [ ] Mesurer l'**autonomie** : le serveur note la batterie (% et tension) de chaque montre **toutes les 5 min** dans `logs/`. Il suffit de lire le journal après la répétition.
       Si c'est trop juste : activer `WiFi.setSleep(true)` (un peu plus de latence) et baisser `BRIGHT_*`.
 - [ ] Tester l'**animation public** sur le vrai écran ou projecteur de la salle (lisibilité de loin, durée de 6 s), avec et sans « Révélation public ».
 - [ ] Tester la **portée** dans une vraie salle (routeur caché en coulisse ?).

@@ -1,8 +1,9 @@
 // StageWatch — firmware LilyGO T-Watch S3
 // Reçoit des messages du serveur (WebSocket), vibre, affiche le texte en très gros, confirme la réception.
 //
+// Écran : s'éteint après 2 min sans message ni appui ; se rallume à l'arrivée d'un message ou avec la couronne.
 // Couronne (bouton latéral) :
-//   - appui court  : affiche l'écran d'info (ID, Wi-Fi, serveur, batterie) quelques secondes
+//   - appui court  : écran éteint → le rallume ; sinon écran d'info (ID, Wi-Fi, serveur, batterie) 5 s
 //   - appui long   : (1,5 s environ, géré par l'AXP2101) entre dans le menu ID ; chaque appui court
 //                    fait défiler 1..8, un nouvel appui long valide et enregistre.
 //   - appui 6 s     : extinction (matériel, valeur LilyGO)
@@ -19,6 +20,7 @@
 #include <WebSocketsClient.h>
 #include <ArduinoJson.h>
 #include "config.h"
+#include "battery_cal.h"
 
 #ifdef SW_DEBUG
 #define LOG(...) Serial.printf(__VA_ARGS__)
@@ -42,6 +44,9 @@ uint16_t serverPort = SERVER_PORT;
 bool wsStarted = false, wsConnected = false;
 String curText = "";
 uint32_t msgAt = 0, lastBeat = 0, lastDraw = 0, infoUntil = 0;
+uint32_t lastActivity = 0;  // dernier message ou appui couronne
+bool screenOff = false;
+bool batCalOk = false;
 bool menuMode = false;
 int menuId = 1;
 volatile bool pmuIrq = false;
@@ -50,7 +55,7 @@ uint8_t curBright = 0;
 
 // Grille de texte FIXE : 12 colonnes x 8 lignes = 96 caractères (identique au simulateur et à la page public).
 // Police à chasse fixe (accents OK). Coupure entre les mots ; un mot de plus de 12 lettres est coupé.
-#define MSG_FONT  u8g2_font_inb24_mf
+#define MSG_FONT  u8g2_font_inb21_mf
 const int COLS = 12, ROWS = 8, CELL_W = 19, CELL_H = 27, GRID_X = 6, GRID_Y = 22;
 
 const uint16_t C_BG = TFT_BLACK, C_TXT = TFT_WHITE, C_MUT = 0x7BEF, C_OK = 0x3E6F, C_BAD = 0xF2AA, C_ACC = 0xFE87;
@@ -63,6 +68,23 @@ void setBrightness(uint8_t v) {
   if (v == curBright) return;
   curBright = v;
   ledcWrite(0, v);
+}
+
+// Écran : extinction complète (rétroéclairage coupé + écran en veille) et réveil
+void screenSleep() {
+  if (screenOff) return;
+  screenOff = true;
+  setBrightness(0);
+  tft.writecommand(0x10);  // ST7789 : sleep in
+  pmu.disableALDO2();      // alimentation du rétroéclairage
+}
+void screenWake() {
+  lastActivity = millis();
+  if (!screenOff) return;
+  screenOff = false;
+  pmu.enableALDO2();
+  tft.writecommand(0x11);  // sleep out
+  delay(120);              // délai requis par le ST7789 après sleep out
 }
 
 void initPower() {
@@ -208,7 +230,12 @@ void drawInfo() {
   row("Wi-Fi", WiFi.isConnected() ? WiFi.localIP().toString() : String("..."), WiFi.isConnected() ? C_OK : C_BAD);
   row("Serveur", wsConnected ? serverHost + ":" + String(serverPort) : (serverHost.isEmpty() ? String("recherche") : serverHost + " ..."), wsConnected ? C_OK : C_BAD);
   int b = batteryPercent();
-  row("Batterie", b >= 0 ? String(b) + "%" + (pmu.isCharging() ? " +" : "") : String("?"), C_TXT);
+  // pourcentage (jauge) + tension mesurée directement (fiable même si la jauge se trompe)
+  String bat = b >= 0 ? String(b) + "% " : String("? ");
+  bat += String(pmu.getBattVoltage() / 1000.0f, 2) + "V";
+  if (pmu.isCharging()) bat += " +";
+  if (!batCalOk) bat += " !";
+  row("Batterie", bat, C_TXT);
   row("Version", FW_VERSION, C_MUT);
 }
 
@@ -246,6 +273,7 @@ void wsSend(JsonDocument& d) {
 }
 void sendHello() {
   JsonDocument d; d["type"] = "hello"; d["id"] = watchId; d["battery"] = batteryPercent(); d["fw"] = FW_VERSION;
+  d["mv"] = pmu.getBattVoltage(); d["chg"] = pmu.isCharging(); d["usb"] = pmu.isVbusIn();
   wsSend(d);
 }
 
@@ -264,11 +292,12 @@ void onWs(WStype_t type, uint8_t* payload, size_t len) {
         curText = String(d["text"] | "");
         curText.trim();
         msgAt = millis(); infoUntil = 0;
+        screenWake();
         setBrightness(BRIGHT_FULL);
         render();
         JsonDocument a; a["type"] = "ack"; a["msgId"] = d["msgId"]; wsSend(a);
       } else if (!strcmp(t, "clear")) {
-        curText = ""; setBrightness(BRIGHT_IDLE); render();
+        curText = ""; if (!screenOff) setBrightness(BRIGHT_IDLE); render();
       }
       break;
     }
@@ -310,6 +339,13 @@ void handleButton() {
   pmu.getIrqStatus();
   bool shortP = pmu.isPekeyShortPressIrq(), longP = pmu.isPekeyLongPressIrq();
   pmu.clearIrqStatus();
+  if (!shortP && !longP) return;
+  if (screenOff) {
+    // écran éteint : l'appui court sert seulement à le rallumer (dernier message affiché)
+    screenWake(); render(); setBrightness(BRIGHT_FULL); msgAt = millis();
+    if (shortP) return;
+  }
+  screenWake();
   setBrightness(BRIGHT_FULL); msgAt = millis();
   if (menuMode) {
     if (shortP) { menuId = menuId % 8 + 1; buzzShort(); }
@@ -347,8 +383,10 @@ void setup() {
   frame.setColorDepth(16);
   frame.createSprite(W, H);
   setBrightness(BRIGHT_IDLE);
+  lastActivity = millis();
 
   prefs.begin("stagewatch", false);
+  batCalOk = calibrateBatteryOnce(pmu, prefs);
   watchId = constrain(prefs.getInt("id", 1), 1, 8);
   render();
 
@@ -368,12 +406,15 @@ void loop() {
   uint32_t now = millis();
   if (wsConnected && now - lastBeat > HEARTBEAT_MS) {
     lastBeat = now;
-    JsonDocument d; d["type"] = "hb"; d["battery"] = batteryPercent(); wsSend(d);
+    JsonDocument d; d["type"] = "hb"; d["battery"] = batteryPercent();
+    d["mv"] = pmu.getBattVoltage(); d["chg"] = pmu.isCharging(); d["usb"] = pmu.isVbusIn();
+    wsSend(d);
   }
-  // Luminosité : pleine après un message, puis réduite (le texte reste visible)
-  if (!menuMode && msgAt && now - msgAt > FULL_MS) setBrightness(curText.isEmpty() ? BRIGHT_IDLE : BRIGHT_DIM);
+  // Luminosité : pleine après un message, puis réduite (le texte reste visible), puis écran éteint
+  if (!screenOff && !menuMode && now - lastActivity > SCREEN_OFF_MS) screenSleep();
+  if (!screenOff && !menuMode && msgAt && now - msgAt > FULL_MS) setBrightness(curText.isEmpty() ? BRIGHT_IDLE : BRIGHT_DIM);
   // Rafraîchit la barre (batterie, état) et la sortie de l'écran info
-  if (now - lastDraw > 15000 || (infoUntil && now > infoUntil && now - infoUntil < 50)) render();
-  if (infoUntil && now > infoUntil) { infoUntil = 0; render(); }
+  if (!screenOff && now - lastDraw > 15000) render();
+  if (infoUntil && now > infoUntil) { infoUntil = 0; if (!screenOff) render(); }
   delay(5);
 }
