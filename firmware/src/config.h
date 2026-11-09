@@ -20,7 +20,12 @@
 #define FULL_MS          30000   // durée en pleine luminosité après un message
 #define SCREEN_OFF_MS    120000  // écran éteint après 2 min sans message ni appui (réveil : message ou couronne)
 #define HEARTBEAT_MS     10000
-#define FW_VERSION       "0.1.3"
+// Vibration à la réception : BUZZ_COUNT impulsions de BUZZ_ON_MS à pleine puissance, séparées de BUZZ_OFF_MS
+#define BUZZ_COUNT       3
+#define BUZZ_ON_MS       400
+#define BUZZ_OFF_MS      180
+#define BUZZ_POWER       50      // intensité en % (100 = max ; plus bas = moins de bruit de résonance du boîtier)
+#define FW_VERSION       "0.1.4"
 
 // ======= Broches T-Watch S3 (source : LilyGO src/utilities.h) =======
 #define PIN_I2C_SDA   10

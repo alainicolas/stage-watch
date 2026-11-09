@@ -32,7 +32,7 @@ Logs pour diagnostiquer (câble branché) : `pio run -e twatch-debug -t upload &
 
 ## À l'écran
 - Au repos : le numéro de la montre en gris. En haut : numéro, pastille verte/rouge (serveur), batterie.
-- Message : **2 vibrations**, puis le texte dans la plus grande police qui tient (accents OK).
+- Message : **3 vibrations** (0,4 s chacune, intensité 50 % : bien senties, peu audibles ; réglables dans `config.h`), puis le texte dans la plus grande police qui tient (accents OK).
   Pleine luminosité 30 s, puis réduite. **Écran éteint après 2 min** sans message ni appui (économie de batterie) : il se rallume à l’arrivée d’un message ou avec la couronne, sur le dernier message.
 
 ## À valider sur la vraie montre

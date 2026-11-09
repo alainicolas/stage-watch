@@ -28,7 +28,7 @@ Commande en cours : 9–10 × LilyGO T-Watch S3 (+ routeur de voyage GL.iNet, c�
 - [ ] **Vérifications et réglages** (tout est dans `firmware/src/main.cpp` / `config.h`) :
   - [ ] Orientation du texte : `tft.setRotation(2)` → essayer 0 à 3.
   - [ ] Couleurs inversées : retirer `-DTFT_INVERSION_ON=1` dans `platformio.ini`.
-  - [ ] Vibration : force et rythme dans `buzzMessage()` (effets DRV2605 de 1 à 123, le 47 est le plus fort).
+  - [x] Vibration : **3 impulsions de 0,4 s à 50 %** (validé : bien sentie, peu audible). À pleine puissance, le boîtier résonne et ça s'entend. Réglages `BUZZ_*` dans `config.h`, avec coupure de sécurité à 3 s.
   - [ ] Couronne : appui court = écran d'info, appui long = menu du numéro.
   - [ ] Batterie : le pourcentage s'affiche dans l'admin.
   - [ ] Lisibilité à bout de bras, sous un éclairage fort. Luminosités : `BRIGHT_*` dans `config.h`.

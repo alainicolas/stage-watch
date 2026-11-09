@@ -128,17 +128,38 @@ void initHaptic() {
   drv.useERM();
 }
 
-// Vibration "message" : 2 impulsions fortes bien senties
+// Vibration "message" : impulsions longues à pleine puissance (mode temps réel du DRV2605),
+// pilotées sans bloquer par hapticTick() dans loop().
+// Garde-fous : réglages bornés à la compilation + coupure forcée du moteur après MOTOR_MAX_MS
+static_assert(BUZZ_ON_MS <= 1000, "BUZZ_ON_MS trop long (max 1000 ms) : risque d'échauffement du moteur");
+static_assert(BUZZ_POWER >= 10 && BUZZ_POWER <= 100, "BUZZ_POWER doit être entre 10 et 100");
+static_assert(BUZZ_COUNT >= 1 && BUZZ_COUNT <= 5, "BUZZ_COUNT doit être entre 1 et 5");
+#define MOTOR_MAX_MS 3000
+bool motorOn = false;
+uint32_t motorSince = 0;
+int buzzStep = -1;          // -1 = inactif ; pair = moteur ON, impair = pause
+uint32_t buzzStepAt = 0;
+void motor(bool on) {
+  motorOn = on; motorSince = millis();
+  if (on) { drv.setMode(DRV2605_MODE_REALTIME); drv.setRealtimeValue((uint8_t)(0x7F * BUZZ_POWER / 100)); }  // 0x7F = pleine échelle
+  else    { drv.setRealtimeValue(0x00); drv.setMode(DRV2605_MODE_INTTRIG); }
+}
 void buzzMessage() {
   if (!hasDrv) return;
-  drv.setWaveform(0, 47);  // Buzz 1 – 100%
-  drv.setWaveform(1, 0x80 | 15);  // pause 150 ms
-  drv.setWaveform(2, 47);
-  drv.setWaveform(3, 0);
-  drv.run();
+  buzzStep = 0; buzzStepAt = millis(); motor(true);
+}
+void hapticTick() {
+  // Sécurité : quoi qu'il arrive, le moteur ne reste jamais allumé plus de MOTOR_MAX_MS
+  if (motorOn && millis() - motorSince > MOTOR_MAX_MS) { motor(false); buzzStep = -1; return; }
+  if (buzzStep < 0) return;
+  uint32_t dur = (buzzStep % 2 == 0) ? BUZZ_ON_MS : BUZZ_OFF_MS;
+  if (millis() - buzzStepAt < dur) return;
+  buzzStep++; buzzStepAt = millis();
+  if (buzzStep >= BUZZ_COUNT * 2 - 1) { motor(false); buzzStep = -1; return; }
+  motor(buzzStep % 2 == 0);
 }
 void buzzShort() {
-  if (!hasDrv) return;
+  if (!hasDrv || buzzStep >= 0) return;
   drv.setWaveform(0, 1); drv.setWaveform(1, 0); drv.run();
 }
 
@@ -399,6 +420,7 @@ void setup() {
 }
 
 void loop() {
+  hapticTick();
   handleButton();
   discover();
   if (wsStarted) ws.loop();
