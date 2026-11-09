@@ -62,6 +62,8 @@ body.setup .cfg{display:block}body.setup .compose{display:none}
 .w .tech{display:none;font-size:11px;color:var(--mut);line-height:1.5}body.setup .w .tech{display:block}
 .w .tech .ota{color:var(--acc)}
 #setupBtn.on{background:var(--acc);color:#111;border:none}
+@keyframes nudge{0%,100%{transform:none}25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}
+.grid.nudge .w{animation:nudge .35s 2;border-color:var(--warn)}
 </style></head><body>
 <header><span class="dot" id="conn"></span><h1>StageWatch · Dirigeant</h1><span class="sp"></span>
 <button id="setupBtn" title="Réglages des montres : Wi-Fi, luminosité, mise à jour">⚙ Réglages montres</button><span id="ips" class="hint" style="margin:0"></span><a href="/public" target="_blank">Page public ↗</a><a href="/sim" target="_blank">Simulateur ↗</a></header>
@@ -154,7 +156,8 @@ function updateCompose() {
   const v = $('txt').value, n = [...v.trim()].length, fits = wrapGrid(v).ok && n <= GRID.max;
   $('cnt').classList.toggle('over', !fits);
   $('cnt').textContent = fits ? n + ' / ' + GRID.max : 'Trop long pour l\'écran (' + n + ' / ' + GRID.max + ')';
-  $('send').disabled = !names.length || !v.trim() || !fits;
+  $('send').disabled = !v.trim() || !fits;  // sans destinataire : le clic explique quoi faire
+  $('send').textContent = names.length ? 'Envoyer' : 'Envoyer…';
 }
 $('grid').addEventListener('click', e => {
   const ed = e.target.closest('[data-edit]'); if (ed) { openEdit(+ed.dataset.edit); return }
@@ -172,7 +175,12 @@ function syncOpts() {
 function pushOpts() { ws.send({ type: 'settings', animate: $('optAnim').checked, reveal: $('optAnim').checked && $('optReveal').checked }) }
 $('optAnim').onchange = pushOpts; $('optReveal').onchange = pushOpts;
 function send() {
-  const text = $('txt').value.trim(); if (!text || !sel.size || $('send').disabled) return;
+  const text = $('txt').value.trim(); if (!text || $('send').disabled) return;
+  if (!sel.size) {  // message tapé avant de choisir : on montre où cliquer, le texte est gardé
+    $('to').innerHTML = '<b style="color:var(--warn)">Choisis d\'abord le ou les destinataires ci-dessus, puis Envoyer</b>';
+    $('grid').classList.remove('nudge'); void $('grid').offsetWidth; $('grid').classList.add('nudge');
+    return;
+  }
   if (ws.send({ type: 'send', targets: [...sel], text })) { $('txt').value = ''; updateCompose() } else alert('Pas connecté au serveur');
 }
 $('send').onclick = send;
